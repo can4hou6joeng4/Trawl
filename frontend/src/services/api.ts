@@ -8,11 +8,7 @@
 
 // 类型定义
 export interface Record {
-  [key: string]: string | undefined;
-  defendant?: string;
-  idNumber?: string;
-  request?: string;
-  factsReason?: string;
+  [key: string]: string;
 }
 
 export interface ExtractResult {
