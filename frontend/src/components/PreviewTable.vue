@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-
-interface Record {
-  [key: string]: string;
-}
+import type { Record } from "../services";
 
 const props = defineProps<{
   records: Record[];

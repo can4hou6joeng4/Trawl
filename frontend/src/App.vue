@@ -245,7 +245,7 @@ async function handleExtract() {
         }
       }
 
-      result.value = res;
+      result.value = res as ExtractResult;
       showNotification(`提取成功！共 ${res.recordCount} 条记录`, "success");
     } else {
       result.value = {

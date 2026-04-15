@@ -1,17 +1,5 @@
 <script setup lang="ts">
-import { api } from "../services";
-
-interface Record {
-  [key: string]: any;
-}
-
-interface ExtractResult {
-  success: boolean;
-  recordCount: number;
-  outputPath: string;
-  errorMessage?: string;
-  records?: Record[];
-}
+import { api, type ExtractResult } from "../services";
 
 const props = defineProps<{
   result: ExtractResult | null;
@@ -56,10 +44,10 @@ async function handleOpenFile(path: string) {
           <span class="label">提取记录</span>
           <span class="value">{{ result.recordCount }}</span>
         </div>
-        <div class="path-box">
+        <div v-if="result.outputPath" class="path-box">
           <span class="label">保存至：</span>
           <code
-            @click="handleOpenFile(result.outputPath)"
+            @click="handleOpenFile(result.outputPath!)"
             class="clickable-path"
             title="点击打开文件"
             >{{ result.outputPath }}</code
