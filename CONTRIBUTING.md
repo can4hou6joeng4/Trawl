@@ -37,6 +37,7 @@ type 类型：`feat` / `fix` / `refactor` / `perf` / `docs` / `test` / `chore` /
 # - Go 1.24+
 # - Node.js 18+
 # - Wails CLI (桌面版开发)
+# - golangci-lint (代码检查): brew install golangci-lint
 
 # 克隆并安装依赖
 git clone https://github.com/can4hou6joeng4/legal-extractor.git

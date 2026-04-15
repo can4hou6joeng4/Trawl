@@ -56,9 +56,8 @@
 Run the following command to start the Web version instantly:
 
 ```bash
-# 1. Set your Baidu API Key (Required for PDF/Image OCR)
-export BAIDU_API_KEY="your_api_key"
-export BAIDU_SECRET_KEY="your_secret_key"
+# 1. Set your Baidu Token (Required for PDF OCR)
+export LEGAL_EXTRACTOR_BAIDU_TOKEN="your_baidu_token"
 
 # 2. Start with Docker Compose
 docker-compose up -d
@@ -125,17 +124,17 @@ For full stack development with hot reload:
 
 ## ⚙️ Configuration
 
-### Baidu OCR (Required for PDF/Image)
+### Baidu OCR (Required for PDF)
 
 The project uses Baidu AI Studio (PaddleOCR-VL) for high-precision document analysis.
 
 📖 **[Read the Full Configuration Guide](docs/user/CONFIG_GUIDE.md)**
 
 **Option 1: Environment Variables**
-- `BAIDU_TOKEN` (Access Token for Baidu Cloud)
+- `LEGAL_EXTRACTOR_BAIDU_TOKEN` (Access Token for Baidu Cloud)
 
 **Option 2: Configuration File**
-Create `internal/config/baked_conf.yaml`:
+Create `config/conf.yaml`:
 ```yaml
 baidu:
   token: "your_baidu_token"
