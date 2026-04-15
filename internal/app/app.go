@@ -155,7 +155,7 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 	if inputPath == "" || outputPath == "" {
 		return ExtractResult{
 			Success:      false,
-			ErrorMessage: "Invalid input or output path",
+			ErrorMessage: "输入或输出路径无效",
 		}
 	}
 
@@ -164,7 +164,7 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 	if err != nil {
 		return ExtractResult{
 			Success:      false,
-			ErrorMessage: fmt.Sprintf("Failed to read file: %v", err),
+			ErrorMessage: fmt.Sprintf("读取文件失败: %v", err),
 		}
 	}
 
@@ -191,7 +191,7 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 	if len(records) == 0 {
 		return ExtractResult{
 			Success:      false,
-			ErrorMessage: "No records found in document",
+			ErrorMessage: "未在文档中找到可提取的记录",
 		}
 	}
 
@@ -247,7 +247,7 @@ func (a *App) PreviewData(inputPath string, fields []string) ExtractResult {
 	if inputPath == "" {
 		return ExtractResult{
 			Success:      false,
-			ErrorMessage: "No file selected",
+			ErrorMessage: "未选择文件",
 		}
 	}
 
@@ -256,7 +256,7 @@ func (a *App) PreviewData(inputPath string, fields []string) ExtractResult {
 	if err != nil {
 		return ExtractResult{
 			Success:      false,
-			ErrorMessage: fmt.Sprintf("Failed to read file: %v", err),
+			ErrorMessage: fmt.Sprintf("读取文件失败: %v", err),
 		}
 	}
 
@@ -278,7 +278,7 @@ func (a *App) PreviewData(inputPath string, fields []string) ExtractResult {
 	if err != nil {
 		return ExtractResult{
 			Success:      false,
-			ErrorMessage: fmt.Sprintf("Preview failed: %v", err),
+			ErrorMessage: fmt.Sprintf("预览失败: %v", err),
 		}
 	}
 

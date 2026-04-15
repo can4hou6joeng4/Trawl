@@ -1,7 +1,5 @@
 # LegalExtractor Web 版 Docker Compose 配置
 
-version: '3.8'
-
 services:
   legal-extractor-web:
     build:

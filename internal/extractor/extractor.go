@@ -514,6 +514,13 @@ func (e *Extractor) parseCases(text string, fields []string) []Record {
 	return data
 }
 
+// smartMerge 预编译正则
+var (
+	reMultipleNL     = regexp.MustCompile(`\n+`)
+	rePreserveAfter  = regexp.MustCompile(`([。；？！])\n`)
+	rePreserveBefore = regexp.MustCompile(`\n(\s*(?:[一二三四五六七八九十\d]+[、．]|[(（][一二三四五六七八九十\d]+[)）]))`)
+)
+
 // smartMerge 智能合并换行符
 // 逻辑：保留句号、分号、冒号后的换行，或者新条目序号（如"二、"）之前的换行，其他的换行符视作布局造成的干扰并予以合并。
 func smartMerge(s string) string {
@@ -524,16 +531,10 @@ func smartMerge(s string) string {
 
 	// 1. 标准化换行符
 	s = strings.ReplaceAll(s, "\r\n", "\n")
-	reMultipleNL := regexp.MustCompile(`\n+`)
 	s = reMultipleNL.ReplaceAllString(s, "\n")
 
 	// 2. 标记需要保留的"逻辑断点"
-	// A. 句末标点后：。；？！
-	rePreserveAfter := regexp.MustCompile(`([。；？！])\n`)
 	s = rePreserveAfter.ReplaceAllString(s, "$1[LOGICAL_NL]")
-
-	// B. 条目序号前：\n一、 \n(1) 等
-	rePreserveBefore := regexp.MustCompile(`\n(\s*(?:[一二三四五六七八九十\d]+[、．]|[(（][一二三四五六七八九十\d]+[)）]))`)
 	s = rePreserveBefore.ReplaceAllString(s, "[LOGICAL_NL]$1")
 
 	// 3. 合并 OCR 碎行：将剩余的非逻辑换行符替换为一个小空格，防止文字粘连
@@ -550,7 +551,6 @@ func smartMerge(s string) string {
 		if trimmed == "" {
 			continue
 		}
-		// 压缩行内连续空格，但保留单个空格
 		fields := strings.Fields(trimmed)
 		resultLines = append(resultLines, strings.Join(fields, " "))
 	}
