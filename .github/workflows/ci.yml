@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Create embedded config for compilation
+        run: |
+          mkdir -p internal/config
+          echo 'baidu:
+            token: ""
+            api_url: ""' > internal/config/baked_conf.yaml
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: ./internal/... ./cmd/...
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Create embedded config for compilation
+        run: |
+          mkdir -p internal/config
+          echo 'baidu:
+            token: ""
+            api_url: ""' > internal/config/baked_conf.yaml
+
+      - name: Run tests
+        run: go test -race -count=1 ./internal/... ./cmd/...
+
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Create embedded config for compilation
+        run: |
+          mkdir -p internal/config
+          echo 'baidu:
+            token: ""
+            api_url: ""' > internal/config/baked_conf.yaml
+
+      - name: Verify build
+        run: go build ./internal/... ./cmd/...
