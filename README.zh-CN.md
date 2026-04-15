@@ -2,7 +2,7 @@
   <img src="build/appicon.png" alt="Legal Extractor Logo" width="120" height="120">
 </p>
 
-<h1 align="center">法律文书提取器 (Legal Document Extractor) v3.0.0</h1>
+<h1 align="center">法律文书提取器 (Legal Document Extractor)</h1>
 
 <p align="center">
   <strong>新一代法律文书智能提取工具，基于高性能 OCR 与并行解析引擎</strong>
@@ -13,10 +13,12 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-3.0.0-blue?style=flat-square" alt="Version">
+  <a href="https://github.com/can4hou6joeng4/legal-extractor/releases/latest"><img src="https://img.shields.io/github/v/release/can4hou6joeng4/legal-extractor?style=flat-square&color=blue" alt="Latest Release"></a>
+  <a href="https://github.com/can4hou6joeng4/legal-extractor/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/can4hou6joeng4/legal-extractor/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status"></a>
+  <a href="https://goreportcard.com/report/github.com/can4hou6joeng4/legal-extractor"><img src="https://goreportcard.com/badge/github.com/can4hou6joeng4/legal-extractor?style=flat-square" alt="Go Report Card"></a>
+  <a href="https://github.com/can4hou6joeng4/legal-extractor/blob/main/LICENSE"><img src="https://img.shields.io/github/license/can4hou6joeng4/legal-extractor?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat-square&logo=go" alt="Go Version">
   <img src="https://img.shields.io/badge/Vue-3.x-4FC08D?style=flat-square&logo=vue.js" alt="Vue Version">
-  <img src="https://img.shields.io/badge/Wails-2.x-DF0000?style=flat-square" alt="Wails Version">
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Docker-blue?style=flat-square" alt="Platform">
 </p>
 
