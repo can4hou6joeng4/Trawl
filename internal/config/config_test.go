@@ -123,3 +123,59 @@ func TestGenerateAndVerifyLicense(t *testing.T) {
 		t.Error("不同机器码不应共享授权码")
 	}
 }
+
+func TestInit(t *testing.T) {
+	// 测试默认初始化（无配置文件场景）
+	err := Init("/nonexistent/path/conf.yaml")
+	// 文件不存在应报错
+	if err == nil {
+		t.Error("不存在的配置文件应返回错误")
+	}
+}
+
+func TestInitDefault(t *testing.T) {
+	// 不指定路径，走默认查找逻辑
+	// 不管成功与否，不应 panic
+	_ = Init("")
+}
+
+func TestGet(t *testing.T) {
+	// 未初始化时应返回空配置
+	origCfg := cfg
+	cfg = nil
+	defer func() { cfg = origCfg }()
+
+	c := Get()
+	if c == nil {
+		t.Fatal("Get() 不应返回 nil")
+	}
+}
+
+func TestGetBaidu(t *testing.T) {
+	origCfg := cfg
+	cfg = nil
+	defer func() { cfg = origCfg }()
+
+	b := GetBaidu()
+	if b.Token != "" {
+		t.Errorf("未初始化时 Token 应为空，实际 %q", b.Token)
+	}
+}
+
+func TestLoadConfig(t *testing.T) {
+	// 走兼容 API
+	c, err := LoadConfig("")
+	// 不关心是否成功（取决于环境），只要不 panic
+	_ = c
+	_ = err
+}
+
+func TestIsActivated_NoViper(t *testing.T) {
+	origV := v
+	v = nil
+	defer func() { v = origV }()
+
+	if IsActivated() {
+		t.Error("viper 未初始化时应返回未激活")
+	}
+}
