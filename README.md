@@ -15,6 +15,7 @@
 <p align="center">
   <a href="https://github.com/can4hou6joeng4/legal-extractor/releases/latest"><img src="https://img.shields.io/github/v/release/can4hou6joeng4/legal-extractor?style=flat-square&color=blue" alt="Latest Release"></a>
   <a href="https://github.com/can4hou6joeng4/legal-extractor/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/can4hou6joeng4/legal-extractor/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status"></a>
+  <a href="https://codecov.io/gh/can4hou6joeng4/legal-extractor"><img src="https://img.shields.io/codecov/c/github/can4hou6joeng4/legal-extractor?style=flat-square&label=Coverage" alt="Coverage"></a>
   <a href="https://goreportcard.com/report/github.com/can4hou6joeng4/legal-extractor"><img src="https://goreportcard.com/badge/github.com/can4hou6joeng4/legal-extractor?style=flat-square" alt="Go Report Card"></a>
   <a href="https://github.com/can4hou6joeng4/legal-extractor/blob/main/LICENSE"><img src="https://img.shields.io/github/license/can4hou6joeng4/legal-extractor?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat-square&logo=go" alt="Go Version">
