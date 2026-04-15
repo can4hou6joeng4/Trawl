@@ -1,6 +1,8 @@
 package extractor
 
 import (
+	"archive/zip"
+	"bytes"
 	"testing"
 )
 
@@ -236,5 +238,51 @@ func TestDefaultPatterns(t *testing.T) {
 		if _, ok := PatternRegistry[f]; !ok {
 			t.Errorf("PatternRegistry 缺少字段 %q", f)
 		}
+	}
+}
+
+func TestExtractTextFromDocx_InvalidData(t *testing.T) {
+	_, err := extractTextFromDocx([]byte("not a valid zip"))
+	if err == nil {
+		t.Error("无效 docx 数据应返回错误")
+	}
+}
+
+func TestExtractTextFromDocx_EmptyZip(t *testing.T) {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	f, _ := w.Create("other.xml")
+	f.Write([]byte("<root/>"))
+	w.Close()
+
+	_, err := extractTextFromDocx(buf.Bytes())
+	if err == nil {
+		t.Error("缺少 document.xml 的 zip 应返回错误")
+	}
+}
+
+func TestExtractFromDocx_InvalidData(t *testing.T) {
+	e := NewExtractor(nil)
+	_, err := e.extractFromDocx([]byte("bad data"), []string{"defendant"})
+	if err == nil {
+		t.Error("无效 docx 应返回错误")
+	}
+}
+
+func TestExtractData_CacheHit(t *testing.T) {
+	e := NewExtractor(nil)
+	data := []byte("test data for cache")
+	hash := e.calculateHash(data)
+
+	e.cacheMu.Lock()
+	e.cache[hash] = []Record{{"defendant": "缓存张三"}}
+	e.cacheMu.Unlock()
+
+	records, err := e.ExtractData(data, "test.pdf", []string{"defendant"}, nil)
+	if err != nil {
+		t.Fatalf("缓存命中不应报错: %v", err)
+	}
+	if len(records) != 1 || records[0]["defendant"] != "缓存张三" {
+		t.Error("应返回缓存中的数据")
 	}
 }
