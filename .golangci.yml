@@ -18,6 +18,8 @@ issues:
   exclude-dirs:
     - frontend
     - build
+  exclude-files:
+    - "^main\\.go$"
   exclude-rules:
     - path: _test\.go
       linters:

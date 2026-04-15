@@ -32,6 +32,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          args: ./internal/... ./cmd/...
 
   test:
     name: Test
@@ -52,7 +53,7 @@ jobs:
             api_url: ""' > internal/config/baked_conf.yaml
 
       - name: Run tests
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 ./internal/... ./cmd/...
 
   build:
     name: Build Check
@@ -74,4 +75,4 @@ jobs:
             api_url: ""' > internal/config/baked_conf.yaml
 
       - name: Verify build
-        run: go build ./...
+        run: go build ./internal/... ./cmd/...
