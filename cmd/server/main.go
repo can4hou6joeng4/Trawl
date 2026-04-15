@@ -33,10 +33,36 @@ type IPRateLimiter struct {
 
 // NewIPRateLimiter 创建新的限流器
 func NewIPRateLimiter(limit int, window time.Duration) *IPRateLimiter {
-	return &IPRateLimiter{
+	rl := &IPRateLimiter{
 		requests: make(map[string][]time.Time),
 		limit:    limit,
 		window:   window,
+	}
+	go rl.cleanup()
+	return rl
+}
+
+// cleanup 定期清理过期记录，防止内存泄漏
+func (r *IPRateLimiter) cleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		r.mu.Lock()
+		now := time.Now()
+		for ip, times := range r.requests {
+			var valid []time.Time
+			for _, t := range times {
+				if now.Sub(t) < r.window {
+					valid = append(valid, t)
+				}
+			}
+			if len(valid) == 0 {
+				delete(r.requests, ip)
+			} else {
+				r.requests[ip] = valid
+			}
+		}
+		r.mu.Unlock()
 	}
 }
 
@@ -103,13 +129,15 @@ type ExportRequest struct {
 }
 
 func main() {
-	// 1. 初始化配置
+	// 1. 初始化日志
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	// 2. 初始化配置
 	if err := config.Init(""); err != nil {
-		fmt.Println("警告: 配置加载失败:", err.Error())
+		logger.Warn("配置加载失败", "error", err.Error())
 	}
 
-	// 2. 初始化提取器
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	// 3. 初始化提取器
 	extractorInstance = extractor.NewExtractor(logger)
 
 	// 3. 创建 Echo 实例
@@ -124,6 +152,9 @@ func main() {
 	// 限流：每 IP 每分钟最多 10 次请求
 	limiter := NewIPRateLimiter(10, time.Minute)
 	e.Use(RateLimitMiddleware(limiter))
+
+	// 文件上传大小限制：50MB
+	e.Use(middleware.BodyLimit("50M"))
 
 	// 5. 路由
 	e.GET("/", handleIndex)
@@ -147,7 +178,7 @@ func main() {
 func handleIndex(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"service": "LegalExtractor Web API",
-		"version": "2.1.0",
+		"version": "3.0.0",
 		"status":  "running",
 	})
 }
@@ -172,11 +203,11 @@ func handleExtract(c echo.Context) error {
 
 	// 2. 验证文件类型
 	ext := strings.ToLower(filepath.Ext(file.Filename))
-	allowedExts := map[string]bool{".pdf": true, ".docx": true, ".jpg": true, ".jpeg": true, ".png": true}
+	allowedExts := map[string]bool{".pdf": true, ".docx": true}
 	if !allowedExts[ext] {
 		return c.JSON(http.StatusBadRequest, ExtractResponse{
 			Success: false,
-			Error:   fmt.Sprintf("不支持的文件格式: %s，支持 PDF、DOCX、JPG、PNG", ext),
+			Error:   fmt.Sprintf("不支持的文件格式: %s，支持 PDF 和 DOCX", ext),
 		})
 	}
 
@@ -207,19 +238,14 @@ func handleExtract(c echo.Context) error {
 	// 5. 调用核心提取逻辑
 	records, err := extractorInstance.ExtractData(fileData, file.Filename, fields, nil)
 	if err != nil {
-		fmt.Printf("提取失败: %v\n", err)
+		extractorInstance.Logger().Error("提取失败", "error", err)
 		return c.JSON(http.StatusInternalServerError, ExtractResponse{
 			Success: false,
 			Error:   fmt.Sprintf("提取失败: %v", err),
 		})
 	}
 
-	fmt.Printf("提取成功，记录数: %d\n", len(records))
-	if len(records) > 0 {
-		fmt.Printf("第一条记录示例: %+v\n", records[0])
-	} else {
-		fmt.Println("警告: 返回了空记录列表")
-	}
+	extractorInstance.Logger().Info("提取完成", "recordCount", len(records))
 
 	// 6. 获取字段标签
 	labels := make(map[string]string)

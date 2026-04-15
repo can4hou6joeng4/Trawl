@@ -4,6 +4,7 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -138,7 +139,7 @@ func Init(configPath string) error {
 	} else {
 		// 文件读取成功，检查是否为空配置且无内置 Token
 		if v.GetString("baidu.token") == "" && EmbeddedBaiduToken == "" {
-			fmt.Println("[ℹ️ 提示] 未检测到百度云密钥，尝试加载内置配置...")
+			log.Println("未检测到百度云密钥，尝试加载内置配置")
 			useBaked = true
 		}
 	}
@@ -147,9 +148,9 @@ func Init(configPath string) error {
 	if useBaked && len(bakedConfig) > 0 {
 		v.SetConfigType("yaml")
 		if loadErr := v.MergeConfig(bytes.NewBuffer(bakedConfig)); loadErr != nil {
-			fmt.Printf("[⚠️ 警告] 加载内置配置失败: %v\n", loadErr)
+			log.Printf("加载内置配置失败: %v\n", loadErr)
 		} else {
-			fmt.Println("[ℹ️ 提示] 已加载内置预设配置 (baked_conf.yaml)")
+			log.Println("已加载内置预设配置")
 		}
 	}
 

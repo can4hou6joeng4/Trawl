@@ -3,7 +3,6 @@ package extractor
 import (
 	"encoding/csv"
 	"encoding/json"
-	"fmt"
 	"os"
 
 	"github.com/xuri/excelize/v2"
@@ -78,9 +77,7 @@ func ExportJSON(path string, records []Record) error {
 func ExportExcel(path string, records []Record) error {
 	f := excelize.NewFile()
 	defer func() {
-		if err := f.Close(); err != nil {
-			fmt.Println(err)
-		}
+		_ = f.Close()
 	}()
 
 	// Create a new sheet.

@@ -56,9 +56,8 @@
 使用 Docker 立即启动 Web 版本：
 
 ```bash
-# 1. 设置百度 API 密钥 (处理 PDF/图片必须)
-export BAIDU_API_KEY="您的API_KEY"
-export BAIDU_SECRET_KEY="您的SECRET_KEY"
+# 1. 设置百度 Token (处理 PDF 必须)
+export LEGAL_EXTRACTOR_BAIDU_TOKEN="您的百度Token"
 
 # 2. 使用 Docker Compose 启动
 docker-compose up -d
@@ -125,17 +124,17 @@ wails dev
 
 ## ⚙️ 配置说明
 
-### 百度 OCR (PDF/图片必须)
+### 百度 OCR (PDF 必须)
 
 本项目接入了百度 AI Studio (PaddleOCR-VL) 大模型，用于处理复杂的 PDF 和扫描件。
 
 📖 **[点击查看详细配置指南](docs/user/CONFIG_GUIDE.md)**
 
 **方式 1: 环境变量**
-- `BAIDU_TOKEN` (百度云访问令牌)
+- `LEGAL_EXTRACTOR_BAIDU_TOKEN` (百度云访问令牌)
 
 **方式 2: 配置文件**
-在 `internal/config/baked_conf.yaml` 中配置：
+在 `config/conf.yaml` 中配置：
 ```yaml
 baidu:
   token: "您的百度Token"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { OpenFile } from "../../wailsjs/go/app/App";
+import { api } from "../services";
 
 interface Record {
   [key: string]: any;
@@ -28,7 +28,7 @@ const emit = defineEmits<{
 async function handleOpenFile(path: string) {
   if (!path) return;
   try {
-    await OpenFile(path);
+    await api.service.openFile(path);
   } catch (e) {
     console.error("Failed to open file:", e);
     emit("notification", "无法打开文件", "error");

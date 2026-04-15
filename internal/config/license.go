@@ -1,33 +1,44 @@
 package config
 
 import (
-	"crypto/md5"
+	"crypto/hmac"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
+// LicenseSecret 授权密钥，构建时通过 -ldflags 注入
+var LicenseSecret string = ""
+
 // GetMachineID 获取当前设备的唯一识别短码
 func GetMachineID() string {
-	// 获取主机名作为简单标识（生产环境下建议结合 CPU/硬盘序列号）
-	// 为了演示，我们先使用基础库，避免引入外部依赖
-	hostname, _ := "LegalExtractor-User", error(nil)
-	// 实际应用中可以获取更硬的标识
-	hash := md5.Sum([]byte(hostname + "salt-for-legal"))
+	hostname, err := os.Hostname()
+	if err != nil || hostname == "" {
+		hostname = "unknown-host"
+	}
+	hash := sha256.Sum256([]byte(hostname + "legal-extractor-machine"))
 	return strings.ToUpper(fmt.Sprintf("%x", hash)[:8])
 }
 
 // VerifyLicense 校验授权码是否合法
-// 规则：授权码 = MD5(MachineID + "SECRET_KEY") 的前 16 位，每 4 位加一个横杠
 func VerifyLicense(machineID, licenseCode string) bool {
+	if LicenseSecret == "" {
+		return false
+	}
 	expected := GenerateLicense(machineID)
-	return strings.ToUpper(licenseCode) == expected
+	return strings.EqualFold(licenseCode, expected)
 }
 
-// GenerateLicense 生成授权码（供开发者使用）
+// GenerateLicense 基于密钥生成授权码
 func GenerateLicense(machineID string) string {
-	raw := fmt.Sprintf("%x", md5.Sum([]byte(machineID + "legal-extractor-secret-2026")))
+	if LicenseSecret == "" {
+		return ""
+	}
+	mac := hmac.New(sha256.New, []byte(LicenseSecret))
+	mac.Write([]byte(machineID))
+	raw := fmt.Sprintf("%x", mac.Sum(nil))
 	code := strings.ToUpper(raw[:16])
 	return fmt.Sprintf("%s-%s-%s-%s", code[0:4], code[4:8], code[8:12], code[12:16])
 }

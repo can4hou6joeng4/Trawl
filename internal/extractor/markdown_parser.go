@@ -5,6 +5,13 @@ import (
 	"strings"
 )
 
+// 预编译正则，避免每次函数调用重复编译
+var (
+	reHTML      = regexp.MustCompile(`<[^>]*>`)
+	reHeader    = regexp.MustCompile(`^(?i)(诉讼请求|事实与理由|事实和理由|事实经过)[:：\s]*`)
+	reColonSplit = regexp.MustCompile(`[:：]`)
+)
+
 // ParseMarkdown 针对 PaddleOCR-VL 优化的解析器
 func ParseMarkdown(markdown string) []Record {
 	if markdown == "" {
@@ -74,8 +81,7 @@ func ParseMarkdown(markdown string) []Record {
 
 // stripHTML 使用正则剥离所有 HTML 标签
 func stripHTML(input string) string {
-	re := regexp.MustCompile(`<[^>]*>`)
-	return re.ReplaceAllString(input, "")
+	return reHTML.ReplaceAllString(input, "")
 }
 
 // cleanMarkdown 移除 Markdown 格式符号，保持纯文本整洁
@@ -90,7 +96,6 @@ func cleanMarkdown(s string) string {
 	s = strings.ReplaceAll(s, "&nbsp;", " ")
 
 	// 移除关键词头部，防止内容中重复出现标题
-	reHeader := regexp.MustCompile(`^(?i)(诉讼请求|事实与理由|事实和理由|事实经过)[:：\s]*`)
 	s = reHeader.ReplaceAllString(s, "")
 
 	// 规范化换行和空格
@@ -103,7 +108,7 @@ func extractField(text, keyword string) string {
 	for i, line := range lines {
 		if strings.Contains(line, keyword) {
 			// 尝试分割冒号
-			parts := regexp.MustCompile(`[:：]`).Split(line, 2)
+			parts := reColonSplit.Split(line, 2)
 			val := ""
 			if len(parts) > 1 {
 				val = strings.TrimSpace(parts[1])
