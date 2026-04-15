@@ -24,6 +24,12 @@
 
 ---
 
+<p align="center">
+  <img src="docs/images/app-screenshot.png" alt="Legal Extractor 界面截图" width="800">
+</p>
+
+---
+
 ## ✨ 功能特性
 
 - 🚀 **v3.0 新一代引擎** - 全面接入百度 AI Studio 高性能模型，识别精度大幅提升。

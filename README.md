@@ -24,6 +24,12 @@
 
 ---
 
+<p align="center">
+  <img src="docs/images/app-screenshot.png" alt="Legal Extractor Screenshot" width="800">
+</p>
+
+---
+
 ## ✨ Features
 
 - 🚀 **v3.0 Next-Gen Engine** - Powered by Baidu AI Studio for high-precision legal document analysis.
