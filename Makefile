@@ -4,6 +4,34 @@ BUILD_DIR := build/bin
 # Default target: Build for macOS (Host) and Windows
 all: mac-universal windows
 
+# ===== Code Quality =====
+
+# Run all tests with race detection
+test:
+	@echo "🧪 Running tests..."
+	go test -race -count=1 ./...
+
+# Run golangci-lint
+lint:
+	@echo "🔍 Running linter..."
+	golangci-lint run ./...
+
+# Format all Go source files
+fmt:
+	@echo "🎨 Formatting code..."
+	go fmt ./...
+
+# Run go vet
+vet:
+	@echo "🔬 Running go vet..."
+	go vet ./...
+
+# All quality checks
+check: fmt vet lint test
+	@echo "✅ All checks passed."
+
+# ===== Build Targets =====
+
 # Build for macOS (Universal: amd64 + arm64)
 mac: mac-universal
 
@@ -31,6 +59,8 @@ linux:
 	@echo "⚠️  Note: Building Linux binaries on macOS is difficult. Use Docker or CI instead."
 	wails build -platform linux/amd64
 
+# ===== Setup =====
+
 # Install dependencies (Homebrew required)
 deps:
 	@echo "🛠 Checking dependencies..."
@@ -40,6 +70,8 @@ deps:
 	fi
 	@echo "📦 Installing mingw-w64 for Windows cross-compilation..."
 	brew install mingw-w64
+	@echo "📦 Installing golangci-lint..."
+	brew install golangci-lint
 	@echo "✅ Done."
 
 # Clean build directory
@@ -49,4 +81,4 @@ clean:
 	rm -rf dist/
 	@echo "✅ Done."
 
-.PHONY: all mac mac-universal mac-amd64 mac-arm64 windows linux deps clean
+.PHONY: all test lint fmt vet check mac mac-universal mac-amd64 mac-arm64 windows linux deps clean
