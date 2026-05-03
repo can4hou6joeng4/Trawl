@@ -65,6 +65,9 @@ export interface IApiService {
   getMachineID(): Promise<string>;
   // 激活授权
   activate(licenseKey: string): Promise<boolean>;
+
+  // 取消进行中的提取任务（无任务时为 no-op）
+  cancelExtraction(): Promise<void>;
 }
 
 // ============================================
@@ -127,6 +130,11 @@ class DesktopAdapter implements IApiService {
     const { Activate } = await import('../../wailsjs/go/app/App');
     return Activate(licenseKey);
   }
+
+  async cancelExtraction(): Promise<void> {
+    const { CancelExtraction } = await import('../../wailsjs/go/app/App');
+    return CancelExtraction();
+  }
 }
 
 // ============================================
@@ -134,6 +142,7 @@ class DesktopAdapter implements IApiService {
 // ============================================
 class WebAdapter implements IApiService {
   private baseUrl: string;
+  private activeController: AbortController | null = null;
 
   constructor(baseUrl: string = '') {
     // 默认使用当前域名，或可通过环境变量配置
@@ -168,17 +177,34 @@ class WebAdapter implements IApiService {
     const params = new URLSearchParams();
     fields.forEach(f => params.append('fields', f));
 
-    const response = await fetch(`${this.baseUrl}/api/extract?${params.toString()}`, {
-      method: 'POST',
-      body: formData,
-    });
+    // 取消任何上一次未完成的请求，开启新的 AbortController
+    this.activeController?.abort();
+    const controller = new AbortController();
+    this.activeController = controller;
 
-    if (!response.ok) {
-      const error = await response.json();
-      return { success: false, recordCount: 0, errorMessage: error.error };
+    try {
+      const response = await fetch(`${this.baseUrl}/api/extract?${params.toString()}`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, recordCount: 0, errorMessage: error.error };
+      }
+
+      return await response.json();
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        return { success: false, recordCount: 0, errorMessage: 'CANCELLED' };
+      }
+      throw err;
+    } finally {
+      if (this.activeController === controller) {
+        this.activeController = null;
+      }
     }
-
-    return response.json();
   }
 
   async extractToPath(file: File, _outputPath: string, fields: string[]): Promise<ExtractResult> {
@@ -239,6 +265,11 @@ class WebAdapter implements IApiService {
 
   async activate(_licenseKey: string): Promise<boolean> {
     return true;
+  }
+
+  async cancelExtraction(): Promise<void> {
+    this.activeController?.abort();
+    this.activeController = null;
   }
 }
 

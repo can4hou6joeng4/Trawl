@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { api, downloadBlob, type Record, type ExtractResult } from "./services";
 import { EventsOn } from "../wailsjs/runtime/runtime";
+import { formatEta, type ProgressSample } from "./utils/eta";
 import MainDropZone from "./components/MainDropZone.vue";
 import ConfigPanel from "./components/ConfigPanel.vue";
 import ResultCard from "./components/ResultCard.vue";
@@ -59,6 +60,24 @@ const notification = ref<{
 } | null>(null);
 
 const progressPercent = ref(0);
+const progressTotal = ref(0);
+const progressSamples = ref<ProgressSample[]>([]);
+const isCancelling = ref(false);
+
+const etaLabel = computed(() => {
+  if (!isLoading.value || isCancelling.value) return "";
+  return formatEta(progressSamples.value, progressTotal.value);
+});
+
+async function handleCancel() {
+  if (isCancelling.value) return;
+  isCancelling.value = true;
+  try {
+    await api.service.cancelExtraction();
+  } catch (e) {
+    console.error("Cancel failed:", e);
+  }
+}
 
 // Actions
 async function fetchTrialStatus() {
@@ -128,6 +147,12 @@ onMounted(() => {
   // 监听提取进度
   EventsOn("extraction_progress", (data: { current: number; total: number; message: string }) => {
     progressPercent.value = Math.round((data.current / data.total) * 100);
+    progressTotal.value = data.total;
+    progressSamples.value.push({ t: Date.now(), current: data.current });
+    // Keep at most the last 32 samples to bound memory in long extractions.
+    if (progressSamples.value.length > 32) {
+      progressSamples.value = progressSamples.value.slice(-32);
+    }
     loadingText.value = data.message;
   });
 });
@@ -164,6 +189,10 @@ async function handlePreview() {
   if (!selectedFile.value) return;
 
   isLoading.value = true;
+  isCancelling.value = false;
+  progressPercent.value = 0;
+  progressTotal.value = 0;
+  progressSamples.value = [];
   try {
     const res = await api.service.previewData(
       selectedFile.value,
@@ -188,6 +217,10 @@ async function handleExtract() {
   if (!selectedFile.value) return;
 
   isLoading.value = true;
+  isCancelling.value = false;
+  progressPercent.value = 0;
+  progressTotal.value = 0;
+  progressSamples.value = [];
   result.value = null;
 
   try {
@@ -331,11 +364,20 @@ function handleFieldsChange(fields: string[]) {
               <span class="progress-label">当前进度</span>
               <span class="progress-value">{{ progressPercent }}%</span>
             </div>
+            <div v-if="etaLabel" class="progress-eta">{{ etaLabel }}</div>
           </div>
           <div class="loading-content">
-            <h3 class="loading-title">正在处理中</h3>
+            <h3 class="loading-title">{{ isCancelling ? '正在取消...' : '正在处理中' }}</h3>
             <p class="loading-desc">{{ loadingText || (fileName.toLowerCase().endsWith('.pdf') ? '正在进行文档智能解析...' : '正在解析本地文档结构...') }}</p>
           </div>
+          <button
+            class="cancel-btn"
+            type="button"
+            :disabled="isCancelling"
+            @click="handleCancel"
+          >
+            {{ isCancelling ? '取消中...' : '停止' }}
+          </button>
         </div>
       </div>
     </Transition>
@@ -968,6 +1010,39 @@ function handleFieldsChange(fields: string[]) {
   color: var(--accent-primary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 1rem;
+}
+
+.progress-eta {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.cancel-btn {
+  align-self: center;
+  margin-top: 12px;
+  padding: 8px 20px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #fecaca;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .loading-content {

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 
 	"legal-extractor/internal/config"
 	"legal-extractor/internal/extractor"
@@ -19,6 +20,11 @@ import (
 type App struct {
 	ctx       context.Context
 	extractor *extractor.Extractor
+
+	// cancelMu guards cancelFn. cancelFn is non-nil exactly when an
+	// extraction is in flight; calling it aborts that extraction.
+	cancelMu sync.Mutex
+	cancelFn context.CancelFunc
 }
 
 // NewApp creates a new App application struct
@@ -169,8 +175,10 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 		}
 	}
 
-	// 1. Extract Data
-	records, err := a.extractor.ExtractData(a.ctx, fileData, inputPath, fields, func(current, total int, message string) {
+	// 1. Extract Data (per-call cancellable ctx)
+	ctx := a.startExtraction()
+	defer a.finishExtraction()
+	records, err := a.extractor.ExtractData(ctx, fileData, inputPath, fields, func(current, total int, message string) {
 		wr.EventsEmit(a.ctx, "extraction_progress", map[string]interface{}{
 			"current": current,
 			"total":   total,
@@ -264,7 +272,9 @@ func (a *App) PreviewData(inputPath string, fields []string) ExtractResult {
 		}
 	}
 
-	records, err := a.extractor.ExtractData(a.ctx, fileData, inputPath, fields, func(current, total int, message string) {
+	ctx := a.startExtraction()
+	defer a.finishExtraction()
+	records, err := a.extractor.ExtractData(ctx, fileData, inputPath, fields, func(current, total int, message string) {
 		wr.EventsEmit(a.ctx, "extraction_progress", map[string]interface{}{
 			"current": current,
 			"total":   total,
@@ -321,5 +331,42 @@ func friendlyExtractError(err error) string {
 		return "CANCELLED"
 	default:
 		return err.Error()
+	}
+}
+
+// startExtraction returns a new cancellable child of a.ctx and registers its
+// cancel func as the active one. Any previously in-flight extraction is
+// pre-emptively cancelled — the frontend should not allow concurrent
+// extractions, but defending against races here is cheap.
+func (a *App) startExtraction() context.Context {
+	a.cancelMu.Lock()
+	defer a.cancelMu.Unlock()
+	if a.cancelFn != nil {
+		a.cancelFn()
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.cancelFn = cancel
+	return ctx
+}
+
+// finishExtraction releases the active cancel func without cancelling. Safe
+// to call multiple times. Always paired via defer with startExtraction.
+func (a *App) finishExtraction() {
+	a.cancelMu.Lock()
+	defer a.cancelMu.Unlock()
+	if a.cancelFn != nil {
+		a.cancelFn()
+		a.cancelFn = nil
+	}
+}
+
+// CancelExtraction aborts the in-flight extraction (if any). Bound to the
+// frontend via Wails. No-op when no extraction is running.
+func (a *App) CancelExtraction() {
+	a.cancelMu.Lock()
+	defer a.cancelMu.Unlock()
+	if a.cancelFn != nil {
+		a.cancelFn()
+		a.cancelFn = nil
 	}
 }

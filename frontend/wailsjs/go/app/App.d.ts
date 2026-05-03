@@ -6,6 +6,8 @@ import {config} from '../models';
 
 export function Activate(arg1:string):Promise<boolean>;
 
+export function CancelExtraction():Promise<void>;
+
 export function ExportData(arg1:Array<extractor.Record>,arg2:string):Promise<app.ExtractResult>;
 
 export function ExtractToPath(arg1:string,arg2:string,arg3:Array<string>):Promise<app.ExtractResult>;

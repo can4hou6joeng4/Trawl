@@ -6,6 +6,10 @@ export function Activate(arg1) {
   return window['go']['app']['App']['Activate'](arg1);
 }
 
+export function CancelExtraction() {
+  return window['go']['app']['App']['CancelExtraction']();
+}
+
 export function ExportData(arg1, arg2) {
   return window['go']['app']['App']['ExportData'](arg1, arg2);
 }
