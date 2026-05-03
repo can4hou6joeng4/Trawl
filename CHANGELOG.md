@@ -2,6 +2,19 @@
 
 本项目所有重要变更记录。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [3.3.0] - 2026-05-04
+
+### 重构
+- 把 `internal/extractor/extractor.go` 按策略拆为 5 个聚焦文件：调度器（`extractor.go`）、本地 PDF 文本层与 Worker Pool（`pdf_local.go`）、Windows OCR 兜底（`pdf_winocr.go`）、DOCX 解析（`docx.go`）、正则解析与文本归并（`parsing.go`）。零行为变更，公共 API 与导出符号保持一致。
+
+## [3.2.0] - 2026-05-04
+
+### 新增
+- 加载浮层加入"停止"按钮，桌面与 Web 模式均可中止进行中的提取任务
+- 加载浮层显示估算剩余时间（"约 N 秒"/"约 N 分 M 秒"/"估算中..."/"即将完成"）
+- 桌面端 `App.CancelExtraction()` Wails 绑定，串通 Iteration 1 的 `context.Context` 链路
+- Web 端 `AbortController` 路径，配合后端 `c.Request().Context().Done()` 真实中止
+
 ## [3.1.0] - 2026-05-03
 
 ### 修复
@@ -67,6 +80,8 @@
 - 实时预览与多格式导出
 - 暗色玻璃拟态 UI
 
+[3.3.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.3.0
+[3.2.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.2.0
 [3.1.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.1.0
 [3.0.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.0.0
 [2.1.5]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v2.1.5

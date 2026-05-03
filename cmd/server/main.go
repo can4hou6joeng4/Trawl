@@ -179,7 +179,7 @@ func main() {
 func handleIndex(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"service": "LegalExtractor Web API",
-		"version": "3.0.0",
+		"version": "3.3.0",
 		"status":  "running",
 	})
 }
