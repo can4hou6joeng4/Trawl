@@ -244,7 +244,7 @@ func TestDefaultPatterns(t *testing.T) {
 }
 
 func TestExtractTextFromDocx_InvalidData(t *testing.T) {
-	_, err := extractTextFromDocx([]byte("not a valid zip"))
+	_, err := extractTextFromDocx(context.Background(), []byte("not a valid zip"))
 	if err == nil {
 		t.Error("无效 docx 数据应返回错误")
 	}
@@ -257,7 +257,7 @@ func TestExtractTextFromDocx_EmptyZip(t *testing.T) {
 	f.Write([]byte("<root/>"))
 	w.Close()
 
-	_, err := extractTextFromDocx(buf.Bytes())
+	_, err := extractTextFromDocx(context.Background(), buf.Bytes())
 	if err == nil {
 		t.Error("缺少 document.xml 的 zip 应返回错误")
 	}
@@ -265,7 +265,7 @@ func TestExtractTextFromDocx_EmptyZip(t *testing.T) {
 
 func TestExtractFromDocx_InvalidData(t *testing.T) {
 	e := NewExtractor(nil)
-	_, err := e.extractFromDocx([]byte("bad data"), []string{"defendant"})
+	_, err := e.extractFromDocx(context.Background(), []byte("bad data"), []string{"defendant"})
 	if err == nil {
 		t.Error("无效 docx 应返回错误")
 	}

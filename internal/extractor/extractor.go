@@ -78,7 +78,7 @@ func (e *Extractor) ExtractData(ctx context.Context, fileData []byte, fileName s
 		return nil, fmt.Errorf("图片识别功能已暂时禁用（仅支持PDF）: %w", ErrUnsupportedFormat)
 	case ".docx":
 		e.logger.Info("使用本地原生逻辑提取 DOCX", "file", fileName)
-		records, err = e.extractFromDocx(fileData, fields)
+		records, err = e.extractFromDocx(ctx, fileData, fields)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedFormat, ext)
 	}
