@@ -3,6 +3,8 @@ package extractor
 import (
 	"archive/zip"
 	"bytes"
+	"context"
+	"errors"
 	"testing"
 )
 
@@ -195,17 +197,17 @@ func TestNewExtractor(t *testing.T) {
 
 func TestExtractData_UnsupportedFormat(t *testing.T) {
 	e := NewExtractor(nil)
-	_, err := e.ExtractData([]byte("data"), "test.txt", []string{"defendant"}, nil)
-	if err == nil {
-		t.Fatal("不支持的格式应返回错误")
+	_, err := e.ExtractData(context.Background(), []byte("data"), "test.txt", []string{"defendant"}, nil)
+	if !errors.Is(err, ErrUnsupportedFormat) {
+		t.Fatalf("expected ErrUnsupportedFormat, got %v", err)
 	}
 }
 
 func TestExtractData_ImageDisabled(t *testing.T) {
 	e := NewExtractor(nil)
-	_, err := e.ExtractData([]byte("data"), "test.jpg", []string{"defendant"}, nil)
-	if err == nil {
-		t.Fatal("图片格式应返回禁用错误")
+	_, err := e.ExtractData(context.Background(), []byte("data"), "test.jpg", []string{"defendant"}, nil)
+	if !errors.Is(err, ErrUnsupportedFormat) {
+		t.Fatalf("expected ErrUnsupportedFormat for image, got %v", err)
 	}
 }
 
@@ -274,15 +276,24 @@ func TestExtractData_CacheHit(t *testing.T) {
 	data := []byte("test data for cache")
 	hash := e.calculateHash(data)
 
-	e.cacheMu.Lock()
-	e.cache[hash] = []Record{{"defendant": "缓存张三"}}
-	e.cacheMu.Unlock()
+	e.cache.Put(hash, []Record{{"defendant": "缓存张三"}})
 
-	records, err := e.ExtractData(data, "test.pdf", []string{"defendant"}, nil)
+	records, err := e.ExtractData(context.Background(), data, "test.pdf", []string{"defendant"}, nil)
 	if err != nil {
 		t.Fatalf("缓存命中不应报错: %v", err)
 	}
 	if len(records) != 1 || records[0]["defendant"] != "缓存张三" {
 		t.Error("应返回缓存中的数据")
+	}
+}
+
+func TestExtractData_ContextCancelled(t *testing.T) {
+	e := NewExtractor(nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel
+
+	_, err := e.ExtractData(ctx, []byte("data"), "test.pdf", []string{"defendant"}, nil)
+	if !errors.Is(err, ErrCancelled) {
+		t.Fatalf("expected ErrCancelled when ctx cancelled, got %v", err)
 	}
 }

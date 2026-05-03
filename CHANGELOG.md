@@ -2,6 +2,17 @@
 
 本项目所有重要变更记录。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [3.1.0] - 2026-05-03
+
+### 修复
+- `wails.json` 中残留的 2.0.0 版本号
+- `docker-compose.yml` 引用了应用从未读取的 `BAIDU_API_KEY/SECRET_KEY` 环境变量
+
+### 新增
+- 基于 SHA-256 的有界 LRU 缓存（容量 50），替代之前无界增长的内存映射
+- `context.Context` 全链路传播：HTTP 请求中止/百度长任务/Windows OCR 子进程都可被取消
+- 结构化错误类型（`ErrPDFEncrypted`、`ErrUnsupportedFormat`、`ErrTokenMissing`、`ErrCancelled` 等），消除字符串匹配
+
 ## [3.0.0] - 2026-02-03
 
 ### 新增
@@ -56,6 +67,7 @@
 - 实时预览与多格式导出
 - 暗色玻璃拟态 UI
 
+[3.1.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.1.0
 [3.0.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.0.0
 [2.1.5]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v2.1.5
 [2.1.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v2.1.0

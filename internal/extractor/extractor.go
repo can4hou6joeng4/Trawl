@@ -23,12 +23,15 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 )
 
+// defaultCacheCapacity bounds in-memory record cache. ~50 PDFs at typical
+// extraction sizes (a few KB of records each) is well under 5 MB resident.
+const defaultCacheCapacity = 50
+
 // Extractor 处理器，负责协调不同格式的提取策略
 type Extractor struct {
 	logger      *slog.Logger
 	baiduClient *BaiduClient
-	cache       map[string][]Record
-	cacheMu     sync.RWMutex
+	cache       *RecordCache
 }
 
 // NewExtractor 创建一个新的提取器实例
@@ -39,7 +42,7 @@ func NewExtractor(logger *slog.Logger) *Extractor {
 	return &Extractor{
 		logger:      logger,
 		baiduClient: NewBaiduClient(logger),
-		cache:       make(map[string][]Record),
+		cache:       NewRecordCache(defaultCacheCapacity),
 	}
 }
 
@@ -54,34 +57,38 @@ type Record map[string]string
 // ProgressCallback 进度回调函数
 type ProgressCallback func(current, total int, message string)
 
-// ExtractData 根据文件类型选择提取策略
-func (e *Extractor) ExtractData(fileData []byte, fileName string, fields []string, onProgress ProgressCallback) ([]Record, error) {
+// ExtractData 根据文件类型选择提取策略.
+//
+// ctx is honored at every IO boundary: HTTP requests to Baidu, sleeps between
+// retry chunks, and worker-pool result drains. A pre-cancelled ctx returns
+// ErrCancelled before any work is done.
+func (e *Extractor) ExtractData(ctx context.Context, fileData []byte, fileName string, fields []string, onProgress ProgressCallback) ([]Record, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, ErrCancelled
+	}
 	e.logger.Info("开始提取数据", "file", fileName, "size", len(fileData), "fields", fields)
 	ext := strings.ToLower(filepath.Ext(fileName))
 
 	// 1. 检查缓存 (使用文件内容的 SHA256 哈希作为 Key)
 	fileHash := e.calculateHash(fileData)
-	e.cacheMu.RLock()
-	if cached, ok := e.cache[fileHash]; ok {
+	if cached, ok := e.cache.Get(fileHash); ok {
 		e.logger.Info("命中内容哈希缓存，跳过提取", "file", fileName, "hash", fileHash[:8])
-		e.cacheMu.RUnlock()
 		return cached, nil
 	}
-	e.cacheMu.RUnlock()
 
 	var records []Record
 	var err error
 
 	switch ext {
 	case ".pdf":
-		records, err = e.extractPdf(fileData, fields, onProgress)
+		records, err = e.extractPdf(ctx, fileData, fields, onProgress)
 	case ".jpg", ".png", ".jpeg":
-		return nil, fmt.Errorf("图片识别功能已暂时禁用（仅支持PDF）")
+		return nil, fmt.Errorf("图片识别功能已暂时禁用（仅支持PDF）: %w", ErrUnsupportedFormat)
 	case ".docx":
 		e.logger.Info("使用本地原生逻辑提取 DOCX", "file", fileName)
 		records, err = e.extractFromDocx(fileData, fields)
 	default:
-		return nil, fmt.Errorf("不支持的文件格式: %s", ext)
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedFormat, ext)
 	}
 
 	if err != nil {
@@ -90,9 +97,7 @@ func (e *Extractor) ExtractData(fileData []byte, fileName string, fields []strin
 
 	// 2. 写入缓存 (仅当结果非空时)
 	if len(records) > 0 {
-		e.cacheMu.Lock()
-		e.cache[fileHash] = records
-		e.cacheMu.Unlock()
+		e.cache.Put(fileHash, records)
 	}
 
 	return records, nil
@@ -105,7 +110,7 @@ func (e *Extractor) calculateHash(data []byte) string {
 }
 
 // extractPdf 处理 PDF 提取（优先本地提取文本层）
-func (e *Extractor) extractPdf(fileData []byte, fields []string, onProgress ProgressCallback) ([]Record, error) {
+func (e *Extractor) extractPdf(ctx context.Context, fileData []byte, fields []string, onProgress ProgressCallback) ([]Record, error) {
 	e.logger.Info("正在解析 PDF 结构...", "bytes", len(fileData))
 
 	// 1. 获取总页数 (增加多库回退逻辑以提高鲁棒性)
@@ -130,7 +135,7 @@ func (e *Extractor) extractPdf(fileData []byte, fields []string, onProgress Prog
 	// 2. 探测第一页文本层 (带超时保护，防止复杂 PDF 导致挂起)
 	e.logger.Info("正在尝试提取第一页文本层以判断解析模式...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	textChan := make(chan string, 1)
@@ -143,13 +148,13 @@ func (e *Extractor) extractPdf(fileData []byte, fields []string, onProgress Prog
 	select {
 	case firstPageText = <-textChan:
 		e.logger.Debug("文本层探测完成")
-	case <-ctx.Done():
+	case <-probeCtx.Done():
 		e.logger.Warn("文本层探测超时，自动切换至 OCR 模式")
 	}
 
 	if len(strings.TrimSpace(firstPageText)) > 20 {
 		e.logger.Info("检测到 PDF 文本层，切换至 [本地高速解析] 模式")
-		return e.batchExtractLocalPdf(fileData, fields, totalPages, onProgress)
+		return e.batchExtractLocalPdf(ctx, fileData, fields, totalPages, onProgress)
 	}
 
 	e.logger.Info("未检测到 PDF 文本层或文本过少，切换至 [云端识别] 模式")
@@ -157,11 +162,11 @@ func (e *Extractor) extractPdf(fileData []byte, fields []string, onProgress Prog
 	// 3. 如果配置了百度 Token，则优先使用百度 PaddleOCR-VL (Layout Parsing)
 	if e.baiduClient.config.Token != "" {
 		e.logger.Info("使用 [百度云端引擎] 进行解析")
-		return e.baiduClient.ParseDocument(fileData, true, onProgress)
+		return e.baiduClient.ParseDocument(ctx, fileData, true, onProgress)
 	}
 
 	e.logger.Info("未配置百度 Token，回退至 [本地系统识别] 模式")
-	return e.extractViaWinOcr(fileData, totalPages, onProgress)
+	return e.extractViaWinOcr(ctx, fileData, totalPages, onProgress)
 }
 
 // extractPageTextLocally 本地提取指定页码的文本
@@ -181,7 +186,7 @@ func (e *Extractor) extractPageTextLocally(fileData []byte, pageNum int) (string
 }
 
 // batchExtractLocalPdf 批量本地提取 PDF 文本层 (并发加速版)
-func (e *Extractor) batchExtractLocalPdf(fileData []byte, fields []string, totalPages int, onProgress ProgressCallback) ([]Record, error) {
+func (e *Extractor) batchExtractLocalPdf(ctx context.Context, fileData []byte, fields []string, totalPages int, onProgress ProgressCallback) ([]Record, error) {
 	e.logger.Info("启动并行提取引擎", "workers", runtime.NumCPU())
 
 	// 1. 预解析一次 Reader，供所有子任务复用 (dslipak/pdf 是并发安全的)
@@ -193,7 +198,6 @@ func (e *Extractor) batchExtractLocalPdf(fileData []byte, fields []string, total
 	type pageResult struct {
 		pageNum int
 		records []Record
-		err     error
 	}
 
 	// 2. 准备并行任务
@@ -250,6 +254,14 @@ func (e *Extractor) batchExtractLocalPdf(fileData []byte, fields []string, total
 	var allPageResults []pageResult
 	processedCount := 0
 	for res := range results {
+		if err := ctx.Err(); err != nil {
+			// drain remaining results to avoid goroutine leak, then bail
+			go func() {
+				for range results {
+				}
+			}()
+			return nil, ErrCancelled
+		}
 		processedCount++
 		if onProgress != nil {
 			onProgress(processedCount, totalPages, "正在进行文本层逻辑分析...")
@@ -273,14 +285,14 @@ func (e *Extractor) batchExtractLocalPdf(fileData []byte, fields []string, total
 }
 
 // extractViaWinOcr 调用 Windows 系统原生 OCR 桥接工具 (并发加速版)
-func (e *Extractor) extractViaWinOcr(fileData []byte, totalPages int, onProgress ProgressCallback) ([]Record, error) {
+func (e *Extractor) extractViaWinOcr(ctx context.Context, fileData []byte, totalPages int, onProgress ProgressCallback) ([]Record, error) {
 	// 1. 创建临时文件存储 PDF 内容
 	tempFile, err := os.CreateTemp("", "legal_ocr_*.pdf")
 	if err != nil {
 		return nil, fmt.Errorf("创建临时文件失败: %w", err)
 	}
-	defer os.Remove(tempFile.Name())
-	defer tempFile.Close()
+	defer func() { _ = os.Remove(tempFile.Name()) }()
+	defer func() { _ = tempFile.Close() }()
 
 	if _, err := tempFile.Write(fileData); err != nil {
 		return nil, fmt.Errorf("写入临时文件失败: %w", err)
@@ -318,7 +330,7 @@ func (e *Extractor) extractViaWinOcr(fileData []byte, totalPages int, onProgress
 		go func() {
 			defer wg.Done()
 			for pageNum := range jobs {
-				cmd := exec.Command(bridgePath, tempFile.Name(), fmt.Sprintf("%d", pageNum))
+				cmd := exec.CommandContext(ctx, bridgePath, tempFile.Name(), fmt.Sprintf("%d", pageNum))
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					results <- pageResult{pageNum: pageNum}
@@ -355,6 +367,13 @@ func (e *Extractor) extractViaWinOcr(fileData []byte, totalPages int, onProgress
 	var allPageResults []pageResult
 	processed := 0
 	for res := range results {
+		if err := ctx.Err(); err != nil {
+			go func() {
+				for range results {
+				}
+			}()
+			return nil, ErrCancelled
+		}
 		processed++
 		if onProgress != nil {
 			onProgress(processed, totalPages, fmt.Sprintf("正在调用系统识别引擎提取第 %d 页内容...", res.pageNum))
@@ -413,7 +432,7 @@ func extractTextFromDocx(fileData []byte) (string, error) {
 	if documentXML == nil {
 		return "", fmt.Errorf("word/document.xml not found")
 	}
-	defer documentXML.Close()
+	defer func() { _ = documentXML.Close() }()
 
 	decoder := xml.NewDecoder(documentXML)
 	var sb strings.Builder

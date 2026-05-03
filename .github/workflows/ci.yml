@@ -29,9 +29,9 @@ jobs:
             api_url: ""' > internal/config/baked_conf.yaml
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.5.0
           args: ./internal/... ./cmd/...
 
   test:

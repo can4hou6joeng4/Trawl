@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -169,7 +170,7 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 	}
 
 	// 1. Extract Data
-	records, err := a.extractor.ExtractData(fileData, inputPath, fields, func(current, total int, message string) {
+	records, err := a.extractor.ExtractData(a.ctx, fileData, inputPath, fields, func(current, total int, message string) {
 		wr.EventsEmit(a.ctx, "extraction_progress", map[string]interface{}{
 			"current": current,
 			"total":   total,
@@ -177,14 +178,9 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 		})
 	})
 	if err != nil {
-		// 转换特定错误码
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "PDF_ENCRYPTED_OR_LOCKED") {
-			errMsg = "PDF_ENCRYPTED_OR_LOCKED"
-		}
 		return ExtractResult{
 			Success:      false,
-			ErrorMessage: errMsg,
+			ErrorMessage: friendlyExtractError(err),
 		}
 	}
 
@@ -268,7 +264,7 @@ func (a *App) PreviewData(inputPath string, fields []string) ExtractResult {
 		}
 	}
 
-	records, err := a.extractor.ExtractData(fileData, inputPath, fields, func(current, total int, message string) {
+	records, err := a.extractor.ExtractData(a.ctx, fileData, inputPath, fields, func(current, total int, message string) {
 		wr.EventsEmit(a.ctx, "extraction_progress", map[string]interface{}{
 			"current": current,
 			"total":   total,
@@ -308,4 +304,22 @@ func (a *App) OpenFile(path string) error {
 		cmd = exec.Command("xdg-open", path)
 	}
 	return cmd.Start()
+}
+
+// friendlyExtractError converts known sentinel errors into a stable code string
+// the frontend can branch on, while preserving the original message for any
+// unknown failure mode.
+func friendlyExtractError(err error) string {
+	switch {
+	case errors.Is(err, extractor.ErrPDFEncrypted):
+		return "PDF_ENCRYPTED_OR_LOCKED"
+	case errors.Is(err, extractor.ErrUnsupportedFormat):
+		return "UNSUPPORTED_FORMAT: " + err.Error()
+	case errors.Is(err, extractor.ErrTokenMissing):
+		return "BAIDU_TOKEN_MISSING"
+	case errors.Is(err, extractor.ErrCancelled):
+		return "CANCELLED"
+	default:
+		return err.Error()
+	}
 }

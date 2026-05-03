@@ -13,9 +13,11 @@ func writeCSV(path string, records []Record) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
-	file.WriteString("\xEF\xBB\xBF") // BOM for Excel
+	if _, err := file.WriteString("\xEF\xBB\xBF"); err != nil { // BOM for Excel
+		return err
+	}
 
 	w := csv.NewWriter(file)
 	defer w.Flush()
@@ -66,7 +68,7 @@ func ExportJSON(path string, records []Record) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
@@ -135,13 +137,19 @@ func ExportExcel(path string, records []Record) error {
 				return err
 			}
 			// Apply wrap text style
-			f.SetCellStyle(sheetName, cell, cell, wrapStyle)
+			if err := f.SetCellStyle(sheetName, cell, cell, wrapStyle); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Set column widths for better readability
-	f.SetColWidth(sheetName, "A", "B", 20)
-	f.SetColWidth(sheetName, "C", "D", 50)
+	if err := f.SetColWidth(sheetName, "A", "B", 20); err != nil {
+		return err
+	}
+	if err := f.SetColWidth(sheetName, "C", "D", 50); err != nil {
+		return err
+	}
 
 	if err := f.SaveAs(path); err != nil {
 		return err

@@ -2,6 +2,7 @@ package extractor
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -50,14 +51,14 @@ func NewBaiduClient(logger *slog.Logger) *BaiduClient {
 }
 
 // ParseDocument 调用百度 Layout Parsing 接口解析文档
-func (c *BaiduClient) ParseDocument(fileData []byte, isPdf bool, onProgress ProgressCallback) ([]Record, error) {
+func (c *BaiduClient) ParseDocument(ctx context.Context, fileData []byte, isPdf bool, onProgress ProgressCallback) ([]Record, error) {
 	c.logger.Info("开始调用百度 OCR 接口", "isPdf", isPdf, "dataSize", len(fileData))
 	if len(fileData) == 0 {
 		return nil, fmt.Errorf("文件内容为空")
 	}
 
 	if c.config.Token == "" {
-		return nil, fmt.Errorf("百度 AI Studio Token 未配置，请检查 config/conf.yaml")
+		return nil, fmt.Errorf("%w: 请检查 config/conf.yaml", ErrTokenMissing)
 	}
 
 	// 1. 处理超长文档 (百度 API 限制单次 100 页)
@@ -99,14 +100,16 @@ func (c *BaiduClient) ParseDocument(fileData []byte, isPdf bool, onProgress Prog
 					for retry := 0; retry <= maxRetries; retry++ {
 						if retry > 0 {
 							c.logger.Warn(fmt.Sprintf("分块 %d-%d 尝试第 %d 次重试...", start, end, retry))
-							time.Sleep(20 * time.Second) // 收到 500 后重试需等待更久，给服务器释放资源
+							if err := sleepCtx(ctx, 20*time.Second); err != nil {
+							return nil, ErrCancelled
+						}
 						}
 
 						if onProgress != nil {
 							onProgress(start, totalPages, fmt.Sprintf("正在对第 %d-%d 页进行深度识别...", start, end))
 						}
 
-						pages, err = c.callBaiduAPI(chunkBuffer.Bytes(), true, onProgress)
+						pages, err = c.callBaiduAPI(ctx, chunkBuffer.Bytes(), true, onProgress)
 						if err == nil {
 							break
 						}
@@ -123,14 +126,16 @@ func (c *BaiduClient) ParseDocument(fileData []byte, isPdf bool, onProgress Prog
 					// 3. 强制冷却，防止连续高压导致百度后端崩溃
 					if end < totalPages {
 						c.logger.Info("分块处理完成，进入 10 秒冷却期以释放云端算力...")
-						time.Sleep(10 * time.Second)
+						if err := sleepCtx(ctx, 10*time.Second); err != nil {
+							return nil, ErrCancelled
+						}
 					}
 				}
 			} else {
 				if onProgress != nil {
 					onProgress(1, totalPages, "正在进行深度识别与内容校对，请稍候...")
 				}
-				pages, err := c.callBaiduAPI(fileData, true, onProgress)
+				pages, err := c.callBaiduAPI(ctx, fileData, true, onProgress)
 				if err != nil {
 					return nil, err
 				}
@@ -141,7 +146,7 @@ func (c *BaiduClient) ParseDocument(fileData []byte, isPdf bool, onProgress Prog
 		if onProgress != nil {
 			onProgress(1, 1, "正在对文档进行语义化识别...")
 		}
-		pages, err := c.callBaiduAPI(fileData, false, onProgress)
+		pages, err := c.callBaiduAPI(ctx, fileData, false, onProgress)
 		if err != nil {
 			return nil, err
 		}
@@ -173,7 +178,7 @@ func (c *BaiduClient) ParseDocument(fileData []byte, isPdf bool, onProgress Prog
 }
 
 // callBaiduAPI 封装底层的 API 调用逻辑
-func (c *BaiduClient) callBaiduAPI(fileData []byte, isPdf bool, onProgress ProgressCallback) ([]string, error) {
+func (c *BaiduClient) callBaiduAPI(ctx context.Context, fileData []byte, isPdf bool, onProgress ProgressCallback) ([]string, error) {
 	c.logger.Info("正在向百度 AI Studio 发送 POST 请求...")
 	fileBase64 := base64.StdEncoding.EncodeToString(fileData)
 	fileType := 1
@@ -194,7 +199,7 @@ func (c *BaiduClient) callBaiduAPI(fileData []byte, isPdf bool, onProgress Progr
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", c.config.ApiUrl, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.config.ApiUrl, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +239,7 @@ func (c *BaiduClient) callBaiduAPI(fileData []byte, isPdf bool, onProgress Progr
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	c.logger.Info("百度 API 响应接收成功", "status", resp.Status, "duration", time.Since(apiStart))
 
 	// 增加状态码校验：非 200 状态码一律视为失败，触发重试
@@ -261,4 +266,14 @@ func (c *BaiduClient) callBaiduAPI(fileData []byte, isPdf bool, onProgress Progr
 		pages = append(pages, result.Markdown.Text)
 	}
 	return pages, nil
+}
+
+// sleepCtx is time.Sleep that returns early if ctx is cancelled.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	select {
+	case <-time.After(d):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

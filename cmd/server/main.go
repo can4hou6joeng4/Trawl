@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -219,7 +220,7 @@ func handleExtract(c echo.Context) error {
 			Error:   "无法读取上传的文件",
 		})
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	fileData, err := io.ReadAll(src)
 	if err != nil {
@@ -236,10 +237,17 @@ func handleExtract(c echo.Context) error {
 	}
 
 	// 5. 调用核心提取逻辑
-	records, err := extractorInstance.ExtractData(fileData, file.Filename, fields, nil)
+	records, err := extractorInstance.ExtractData(c.Request().Context(), fileData, file.Filename, fields, nil)
 	if err != nil {
 		extractorInstance.Logger().Error("提取失败", "error", err)
-		return c.JSON(http.StatusInternalServerError, ExtractResponse{
+		status := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, extractor.ErrUnsupportedFormat), errors.Is(err, extractor.ErrEmptyFile):
+			status = http.StatusBadRequest
+		case errors.Is(err, extractor.ErrCancelled):
+			status = 499 // client closed request
+		}
+		return c.JSON(status, ExtractResponse{
 			Success: false,
 			Error:   fmt.Sprintf("提取失败: %v", err),
 		})
@@ -290,8 +298,12 @@ func handleExport(c echo.Context) error {
 		})
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
+	if err := tmpFile.Close(); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "关闭临时文件失败",
+		})
+	}
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	// 导出到临时文件
 	switch format {

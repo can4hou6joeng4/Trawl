@@ -11,9 +11,8 @@ services:
     environment:
       # 服务端口
       - PORT=8080
-      # 百度 API 配置（通过环境变量注入，更安全）
-      - BAIDU_API_KEY=${BAIDU_API_KEY:-}
-      - BAIDU_SECRET_KEY=${BAIDU_SECRET_KEY:-}
+      # 百度 AI Studio Token (与 internal/config/config.go 中的 SetEnvPrefix 对齐)
+      - LEGAL_EXTRACTOR_BAIDU_TOKEN=${LEGAL_EXTRACTOR_BAIDU_TOKEN:-}
       # 时区
       - TZ=Asia/Shanghai
     volumes:
