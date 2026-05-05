@@ -130,7 +130,7 @@ async function handleSelectFile() {
         <h3 v-if="!selectedFile">点击或拖拽上传文件</h3>
         <div v-else class="selected-file-info">
           <h3 class="file-name-display">{{ fileName }}</h3>
-          <p class="file-path-text" :title="String(selectedFile)">{{ selectedFile }}</p>
+          <p class="file-path-text" :title="String(selectedFile)">{{ displayPath }}</p>
         </div>
         <p v-if="!selectedFile" class="hint">支持 .docx / .pdf 格式法律文书</p>
       </div>
