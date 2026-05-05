@@ -1,0 +1,27 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+      backend:
+        flags:
+          - backend
+        target: auto
+        threshold: 1%
+      frontend:
+        flags:
+          - frontend
+        target: auto
+        threshold: 1%
+
+flags:
+  backend:
+    paths:
+      - internal/
+      - cmd/
+    carryforward: true
+  frontend:
+    paths:
+      - frontend/src/
+    carryforward: true
