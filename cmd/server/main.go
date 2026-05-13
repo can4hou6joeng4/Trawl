@@ -146,7 +146,15 @@ func main() {
 	e.HideBanner = true
 
 	// 4. 中间件
-	e.Use(middleware.Logger())
+	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogURI:    true,
+		LogStatus: true,
+		LogError:  true,
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			logger.Info("request", "uri", v.URI, "status", v.Status, "error", v.Error)
+			return nil
+		},
+	}))
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS()) // 允许跨域请求
 
