@@ -11,14 +11,6 @@ permissions:
 
 jobs:
   build-macos:
-    strategy:
-      matrix:
-        include:
-          - platform: darwin/amd64
-            arch: amd64
-          - platform: darwin/arm64
-            arch: arm64
-
     runs-on: macos-latest
 
     steps:
@@ -42,21 +34,7 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Wails App
-        env:
-          TENCENT_SECRET_ID: ${{ secrets.TENCENT_SECRET_ID }}
-          TENCENT_SECRET_KEY: ${{ secrets.TENCENT_SECRET_KEY }}
-          BAIDU_TOKEN: ${{ secrets.BAIDU_TOKEN }}
         run: |
-          # 从 GitHub Secrets 生成嵌入配置
-          mkdir -p internal/config
-          cat > internal/config/baked_conf.yaml << EOF
-          tencent:
-            secret_id: "${TENCENT_SECRET_ID}"
-            secret_key: "${TENCENT_SECRET_KEY}"
-          baidu:
-            token: "${BAIDU_TOKEN}"
-          EOF
-
           cd frontend
           npm install
           npm run build
@@ -67,7 +45,7 @@ jobs:
 
           # 注入构建时间戳并构建原生应用
           BUILD_TIME=$(date +%s)
-          wails build -platform ${{ matrix.platform }} -s -ldflags "-X 'legal-extractor/internal/config.BuildTime=$BUILD_TIME'"
+          wails build -platform darwin/universal -s -ldflags "-X 'legal-extractor/internal/config.BuildTime=$BUILD_TIME'"
 
       - name: Create DMG (Manual Method)
         run: |
@@ -78,7 +56,7 @@ jobs:
 
           APP_NAME="legal-extractor.app"
           APP_PATH="build/bin/$APP_NAME"
-          DMG_NAME="legal-extractor_${VERSION}_darwin_${{ matrix.arch }}.dmg"
+          DMG_NAME="legal-extractor_${VERSION}_darwin_universal.dmg"
 
           if [ -d "$APP_PATH" ]; then
             echo "📦 Packaging $APP_PATH into $DMG_NAME..."
@@ -108,7 +86,7 @@ jobs:
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}
+          name: macos-universal
           path: |
             build/bin/*.dmg
 
@@ -147,21 +125,7 @@ jobs:
 
       - name: Build Wails App
         shell: powershell
-        env:
-          TENCENT_SECRET_ID: ${{ secrets.TENCENT_SECRET_ID }}
-          TENCENT_SECRET_KEY: ${{ secrets.TENCENT_SECRET_KEY }}
-          BAIDU_TOKEN: ${{ secrets.BAIDU_TOKEN }}
         run: |
-          # 从 GitHub Secrets 生成嵌入配置
-          New-Item -ItemType Directory -Path "internal/config" -Force | Out-Null
-          @"
-          tencent:
-            secret_id: "$env:TENCENT_SECRET_ID"
-            secret_key: "$env:TENCENT_SECRET_KEY"
-          baidu:
-            token: "$env:BAIDU_TOKEN"
-          "@ | Out-File -FilePath "internal/config/baked_conf.yaml" -Encoding UTF8
-
           cd frontend
           npm install
           npm run build
@@ -173,6 +137,7 @@ jobs:
           # 注入构建时间戳并构建原生应用
           $BUILD_TIME = [int][double]::Parse((Get-Date -UFormat %s))
           wails build -platform windows/amd64 -s -ldflags "-X 'legal-extractor/internal/config.BuildTime=$BUILD_TIME'"
+          wails build -platform windows/amd64 -nsis -s -ldflags "-X 'legal-extractor/internal/config.BuildTime=$BUILD_TIME'"
 
       - name: Package Windows
         shell: powershell
@@ -195,58 +160,24 @@ jobs:
           # 打包为 ZIP
           Compress-Archive -Path "$DistDir/*" -DestinationPath "build/bin/legal-extractor_${VERSION}_windows_amd64.zip"
 
+          # 标准化安装器命名，避免直接暴露 Wails 默认架构命名差异
+          $Installer = Get-ChildItem -Path "build/bin" -Filter "*installer.exe" | Select-Object -First 1
+          if ($Installer) {
+              Copy-Item $Installer.FullName -Destination "build/bin/legal-extractor_${VERSION}_windows_amd64_setup.exe"
+          } else {
+              throw "Windows installer was not generated"
+          }
+
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-amd64
-          path: build/bin/*.zip
-
-  build-docker:
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
-    permissions:
-      packages: write
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          build-args: |
-            GOPROXY=https://proxy.golang.org,direct
+          path: |
+            build/bin/*.zip
+            build/bin/*_setup.exe
 
   release:
-    needs: [build-macos, build-windows, build-docker]
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
 
@@ -263,8 +194,8 @@ jobs:
         run: |
           mkdir -p final-assets
 
-          # 收集所有产物到根目录 (包含 DMG 和 ZIP)
-          find release-assets -type f \( -name "*.dmg" -o -name "*.zip" \) -exec cp {} final-assets/ \;
+          # 收集所有产物到根目录 (包含 DMG、ZIP 和安装器)
+          find release-assets -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.exe" \) -exec cp {} final-assets/ \;
 
           # 收集对应的 Release Notes MD 文件作为资产
           VERSION_FILE="docs/releases/${{ github.ref_name }}.md"

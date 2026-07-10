@@ -71,6 +71,55 @@ func TestExportCSV(t *testing.T) {
 	}
 }
 
+// TestExportCSV_HeterogeneousRecords 回归测试：第一条记录缺失的字段
+// 不应导致整列丢失（表头必须取全部记录的字段并集）。
+func TestExportCSV_HeterogeneousRecords(t *testing.T) {
+	records := []Record{
+		{"defendant": "张三"}, // 第一条没有身份证号
+		{"defendant": "李四", "idNumber": "220102198805061234", "page": "3"},
+	}
+
+	tmpDir := t.TempDir()
+	csvPath := filepath.Join(tmpDir, "hetero.csv")
+
+	if err := ExportCSV(csvPath, records); err != nil {
+		t.Fatalf("ExportCSV() error = %v", err)
+	}
+
+	f, err := os.Open(csvPath)
+	if err != nil {
+		t.Fatalf("打开 CSV 失败: %v", err)
+	}
+	defer f.Close()
+
+	bom := make([]byte, 3)
+	f.Read(bom)
+
+	reader := csv.NewReader(f)
+	allRows, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("读取 CSV 失败: %v", err)
+	}
+
+	wantHeader := []string{"页码", "被告", "身份证号码"}
+	if len(allRows[0]) != len(wantHeader) {
+		t.Fatalf("表头列数 = %d, want %d (%v)", len(allRows[0]), len(wantHeader), allRows[0])
+	}
+	for i, h := range wantHeader {
+		if allRows[0][i] != h {
+			t.Errorf("表头[%d] = %q, want %q", i, allRows[0][i], h)
+		}
+	}
+
+	// 第一条记录的身份证号为空、第二条有值
+	if allRows[1][2] != "" {
+		t.Errorf("第一行身份证号应为空, got %q", allRows[1][2])
+	}
+	if allRows[2][2] != "220102198805061234" {
+		t.Errorf("第二行身份证号 = %q, want %q", allRows[2][2], "220102198805061234")
+	}
+}
+
 func TestExportCSV_EmptyRecords(t *testing.T) {
 	tmpDir := t.TempDir()
 	csvPath := filepath.Join(tmpDir, "empty.csv")

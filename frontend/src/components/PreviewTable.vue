@@ -2,6 +2,8 @@
 import { computed } from "vue";
 import type { Record } from "../services";
 
+// records 由 App.vue 共享传入：单元格 v-model 直接写入记录对象，
+// 父组件导出时（exportData）依赖这些人工修正后的值。
 const props = defineProps<{
   records: Record[];
   fieldLabels: Record;

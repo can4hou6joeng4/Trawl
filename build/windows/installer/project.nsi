@@ -88,6 +88,10 @@ Section
 
     !insertmacro wails.files
 
+    SetOutPath "$INSTDIR\bridge_bin"
+    File /nonfatal "..\..\bin\bridge_bin\*.*"
+    SetOutPath $INSTDIR
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 

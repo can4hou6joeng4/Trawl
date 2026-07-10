@@ -1,8 +1,8 @@
 APP_NAME := legal-extractor
 BUILD_DIR := build/bin
 
-# Default target: Build for macOS (Host) and Windows
-all: mac-universal windows
+# Default target: Build release-grade desktop artifacts
+all: mac-universal windows-installer
 
 # ===== Code Quality =====
 
@@ -53,11 +53,9 @@ windows:
 	@echo "🪟 Building for Windows (amd64)..."
 	wails build -platform windows/amd64
 
-# Build for Linux (Only works if you have gcc setup, usually fails on macOS)
-linux:
-	@echo "🐧 Building for Linux (amd64)..."
-	@echo "⚠️  Note: Building Linux binaries on macOS is difficult. Use Docker or CI instead."
-	wails build -platform linux/amd64
+windows-installer:
+	@echo "🪟 Building Windows installer (amd64)..."
+	wails build -platform windows/amd64 -nsis
 
 # ===== Setup =====
 
@@ -81,4 +79,4 @@ clean:
 	rm -rf dist/
 	@echo "✅ Done."
 
-.PHONY: all test lint fmt vet check mac mac-universal mac-amd64 mac-arm64 windows linux deps clean
+.PHONY: all test lint fmt vet check mac mac-universal mac-amd64 mac-arm64 windows windows-installer deps clean

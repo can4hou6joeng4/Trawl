@@ -1,8 +1,8 @@
 // Package extractor: shared sentinel error values.
 //
 // Use errors.Is(err, ErrXxx) at API boundaries instead of string matching.
-// Each sentinel carries a stable, user-facing Chinese message because both the
-// desktop UI and the web JSON response surface .Error() directly.
+// Each sentinel carries a stable, user-facing Chinese message because the
+// desktop UI surfaces .Error() directly.
 package extractor
 
 import "errors"

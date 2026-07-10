@@ -1,6 +1,9 @@
 package extractor
 
 import (
+	"encoding/json"
+	"os"
+	"reflect"
 	"testing"
 )
 
@@ -147,9 +150,9 @@ func TestParseMarkdown(t *testing.T) {
 		wantFields map[string]string
 	}{
 		{
-			name:    "空字符串返回 nil",
+			name:     "空字符串返回 nil",
 			markdown: "",
-			wantLen: 0,
+			wantLen:  0,
 		},
 		{
 			name: "标准法律文书 Markdown",
@@ -211,5 +214,33 @@ func TestParseMarkdown(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestParseMarkdownSharedFixture(t *testing.T) {
+	markdown, err := os.ReadFile("../../testdata/extraction-fixtures/basic-complaint.md")
+	if err != nil {
+		t.Fatalf("read markdown fixture: %v", err)
+	}
+
+	expectedBytes, err := os.ReadFile("../../testdata/extraction-fixtures/basic-complaint.records.json")
+	if err != nil {
+		t.Fatalf("read expected fixture: %v", err)
+	}
+
+	var expected []Record
+	if err := json.Unmarshal(expectedBytes, &expected); err != nil {
+		t.Fatalf("unmarshal expected fixture: %v", err)
+	}
+
+	got := ParseMarkdown(string(markdown))
+	for i := range got {
+		if got[i]["page"] == "" {
+			got[i]["page"] = "1"
+		}
+	}
+
+	if !reflect.DeepEqual(got, expected) {
+		t.Fatalf("ParseMarkdown() = %#v, want %#v", got, expected)
 	}
 }

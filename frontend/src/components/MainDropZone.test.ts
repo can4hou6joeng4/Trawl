@@ -2,13 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import MainDropZone from './MainDropZone.vue'
 
-const { mockApi } = vi.hoisted(() => ({
+const { mockApi, runtimeMocks } = vi.hoisted(() => ({
   mockApi: {
-    isDesktop: false,
     service: {
-      openFile: vi.fn().mockResolvedValue(undefined),
       selectFile: vi.fn().mockResolvedValue(null),
     },
+  },
+  runtimeMocks: {
+    OnFileDrop: vi.fn(),
+    OnFileDropOff: vi.fn(),
   },
 }))
 
@@ -16,20 +18,25 @@ vi.mock('../services', () => ({
   api: mockApi,
 }))
 
+vi.mock('../../wailsjs/runtime/runtime', () => runtimeMocks)
+
 beforeEach(() => {
   mockApi.service.selectFile.mockClear()
   mockApi.service.selectFile.mockResolvedValue(null)
+  runtimeMocks.OnFileDrop.mockClear()
+  runtimeMocks.OnFileDropOff.mockClear()
 })
 
 describe('MainDropZone', () => {
-  it('selectedFile 为 null 时显示「点击或拖拽上传文件」文案', () => {
+  it('selectedFile 为 null 时显示选择文书入口文案', () => {
     const wrapper = mount(MainDropZone, {
       props: { selectedFile: null, fileName: '' },
     })
-    expect(wrapper.text()).toContain('点击或拖拽上传文件')
+    expect(wrapper.text()).toContain('选择待处理文书')
+    expect(wrapper.text()).toContain('点击选择或拖入 .docx / .pdf / .jpg / .jpeg / .png 文件')
   })
 
-  it('selectedFile 是字符串时 file-path-text 显示该字符串', () => {
+  it('selectedFile 是路径字符串时 file-path-text 显示该路径', () => {
     const wrapper = mount(MainDropZone, {
       props: {
         selectedFile: '/Users/foo/案件.docx',
@@ -38,15 +45,6 @@ describe('MainDropZone', () => {
     })
     expect(wrapper.find('.file-path-text').text()).toBe('/Users/foo/案件.docx')
     expect(wrapper.find('.file-name-display').text()).toBe('案件.docx')
-  })
-
-  it('selectedFile 是 500KB 的 File 时 displayPath 显示 "500.0 KB"', () => {
-    const file = new File(['placeholder'], '案件.pdf', { type: 'application/pdf' })
-    Object.defineProperty(file, 'size', { value: 500 * 1024 })
-    const wrapper = mount(MainDropZone, {
-      props: { selectedFile: file, fileName: '案件.pdf' },
-    })
-    expect(wrapper.find('.file-path-text').text()).toBe('500.0 KB')
   })
 
   it('点击容器调用 selectFile 且非空返回时 emit update:selectedFile', async () => {
@@ -62,31 +60,51 @@ describe('MainDropZone', () => {
     expect(events![0][0]).toBe('/tmp/picked.pdf')
   })
 
-  it('Web drop 合法 .pdf 文件时 emit update:selectedFile 与 success notification', async () => {
+  it('Wails drop 合法 .pdf 路径时 emit update:selectedFile 与 success notification', async () => {
     const wrapper = mount(MainDropZone, {
       props: { selectedFile: null, fileName: '' },
     })
-    const file = new File(['data'], '案件.pdf', { type: 'application/pdf' })
-    await wrapper.find('.drop-zone').trigger('drop', {
-      dataTransfer: { files: [file] },
-    })
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const callback = runtimeMocks.OnFileDrop.mock.calls[0][0]
+    callback(0, 0, ['/tmp/案件.pdf'])
+
     const updateEvents = wrapper.emitted('update:selectedFile')
     expect(updateEvents).toBeTruthy()
-    expect(updateEvents![0][0]).toBe(file)
+    expect(updateEvents![0][0]).toBe('/tmp/案件.pdf')
     const notif = wrapper.emitted('notification')
     expect(notif).toBeTruthy()
     expect(notif![0][0]).toBe('文件已加载')
     expect(notif![0][1]).toBe('success')
   })
 
-  it('Web drop 非法 .txt 文件时 emit error notification 且不 emit update:selectedFile', async () => {
+  it('Wails drop 合法 .jpeg 路径时 emit update:selectedFile 与 success notification', async () => {
     const wrapper = mount(MainDropZone, {
       props: { selectedFile: null, fileName: '' },
     })
-    const file = new File(['data'], 'note.txt', { type: 'text/plain' })
-    await wrapper.find('.drop-zone').trigger('drop', {
-      dataTransfer: { files: [file] },
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const callback = runtimeMocks.OnFileDrop.mock.calls[0][0]
+    callback(0, 0, ['/tmp/证据.JPEG'])
+
+    const updateEvents = wrapper.emitted('update:selectedFile')
+    expect(updateEvents).toBeTruthy()
+    expect(updateEvents![0][0]).toBe('/tmp/证据.JPEG')
+    const notif = wrapper.emitted('notification')
+    expect(notif).toBeTruthy()
+    expect(notif![0][0]).toBe('文件已加载')
+    expect(notif![0][1]).toBe('success')
+  })
+
+  it('Wails drop 非法 .txt 路径时 emit error notification 且不 emit update:selectedFile', async () => {
+    const wrapper = mount(MainDropZone, {
+      props: { selectedFile: null, fileName: '' },
     })
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const callback = runtimeMocks.OnFileDrop.mock.calls[0][0]
+    callback(0, 0, ['/tmp/note.txt'])
+
     expect(wrapper.emitted('update:selectedFile')).toBeFalsy()
     const notif = wrapper.emitted('notification')
     expect(notif).toBeTruthy()

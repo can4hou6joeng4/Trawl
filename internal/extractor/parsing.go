@@ -5,8 +5,19 @@ import (
 	"strings"
 )
 
-// parseCases 现有的本地正则解析逻辑 (用于 DOCX)
+// parseCases 现有的本地正则解析逻辑 (用于 DOCX / PDF 文本层 / WinOCR)。
+// fields 为空时默认提取全部已注册字段（WinOCR 路径依赖此默认值）。
 func (e *Extractor) parseCases(text string, fields []string) []Record {
+	if len(fields) == 0 {
+		for k := range PatternRegistry {
+			fields = append(fields, k)
+		}
+	}
+	fieldSet := make(map[string]bool, len(fields))
+	for _, f := range fields {
+		fieldSet[f] = true
+	}
+
 	parts := DefaultPatterns.Split.Split(text, -1)
 	var data []Record
 
@@ -16,10 +27,6 @@ func (e *Extractor) parseCases(text string, fields []string) []Record {
 		}
 
 		record := make(Record)
-		fieldSet := make(map[string]bool)
-		for _, f := range fields {
-			fieldSet[f] = true
-		}
 
 		// 1. 提取被告
 		if fieldSet["defendant"] {

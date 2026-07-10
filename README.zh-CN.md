@@ -18,9 +18,9 @@
   <a href="https://codecov.io/gh/can4hou6joeng4/legal-extractor"><img src="https://img.shields.io/codecov/c/github/can4hou6joeng4/legal-extractor?style=flat-square&label=Coverage" alt="Coverage"></a>
   <a href="https://goreportcard.com/report/github.com/can4hou6joeng4/legal-extractor"><img src="https://goreportcard.com/badge/github.com/can4hou6joeng4/legal-extractor?style=flat-square" alt="Go Report Card"></a>
   <a href="https://github.com/can4hou6joeng4/legal-extractor/blob/main/LICENSE"><img src="https://img.shields.io/github/license/can4hou6joeng4/legal-extractor?style=flat-square" alt="License"></a>
-  <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat-square&logo=go" alt="Go Version">
+  <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go" alt="Go Version">
   <img src="https://img.shields.io/badge/Vue-3.x-4FC08D?style=flat-square&logo=vue.js" alt="Vue Version">
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Docker-blue?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-blue?style=flat-square" alt="Platform">
 </p>
 
 ---
@@ -40,32 +40,16 @@
 - 🧩 **物理切片** - 支持 50 页以上超长 PDF 文档的自动分片识别。
 - 👁️ **实时预览** - 提取前可预览数据，确保准确性。
 - 💾 **多格式导出** - 支持 Excel (.xlsx), CSV, JSON 格式导出。
-- 🐳 **Docker 支持** - 内置 Docker 镜像，支持一键私有化部署。
 
 ---
 
 ## 🚀 快速开始
 
-### 🅰️ 桌面版 (推荐个人用户)
-
 1. 从 [Releases](https://github.com/can4hou6joeng4/legal-extractor/releases) 下载对应平台的安装包
-2. **macOS**: 双击 `legal-extractor.dmg` 安装并拖入应用程序文件夹
-3. **Windows**: 运行 `legal-extractor_setup.exe` 安装程序
+2. **macOS Intel / Apple Silicon**: 下载通用 `.dmg`，打开后拖入应用程序文件夹
+3. **Windows x64**: 运行 `windows_amd64_setup.exe` 安装程序
 
-### 🅱️ Web 版 (推荐团队/服务器)
-
-使用 Docker 立即启动 Web 版本：
-
-```bash
-# 1. 设置百度 Token (处理 PDF 必须)
-export LEGAL_EXTRACTOR_BAIDU_TOKEN="您的百度Token"
-
-# 2. 使用 Docker Compose 启动
-docker-compose up -d
-
-# 3. 访问浏览器
-# http://localhost:8080
-```
+Windows ARM64 原生构建作为独立发布目标推进，因为 Windows OCR 桥接工具也需要对应 ARM64 产物和真机验证。
 
 ### 使用步骤
 
@@ -79,10 +63,9 @@ docker-compose up -d
 
 ### 环境要求
 
-- Go 1.24+
-- Node.js 18+
-- [Wails CLI](https://wails.io/docs/gettingstarted/installation) (仅桌面版开发需要)
-- Docker & Docker Compose (仅 Web 版开发需要)
+- Go 1.25+
+- Node.js 22+
+- [Wails CLI](https://wails.io/docs/gettingstarted/installation)
 
 ### 安装依赖
 
@@ -95,31 +78,9 @@ cd legal-extractor
 cd frontend && npm install && cd ..
 ```
 
-### 开发模式
-
-#### 桌面版 (Wails)
 ```bash
 wails dev
 ```
-
-#### Web 版 (前后端联调)
-支持全栈热重载开发：
-
-1. **启动后端 (Go)**
-   ```bash
-   # 安装 Air 热加载工具
-   go install github.com/air-verse/air@latest
-
-   # 启动服务
-   air
-   ```
-
-2. **启动前端 (Vite)**
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-   打开 http://localhost:5173 (API 请求会自动代理到后端)
 
 ---
 
@@ -147,17 +108,14 @@ baidu:
 
 ```
 legal-extractor/
-├── cmd/
-│   └── server/          # Web 服务入口 (REST API)
+├── main.go              # Wails 桌面端入口
 ├── internal/            # 核心业务逻辑
 │   ├── app/             # 桌面端逻辑 (Wails 绑定)
 │   ├── config/          # 配置管理
 │   ├── extractor/       # 提取引擎 (PDF/DOCX/OCR)
-├── frontend/            # Vue 3 前端 (自适应 UI)
-│   ├── src/services/    # API 适配层 (Web/Desktop)
+├── frontend/            # Vue 3 桌面端界面
+│   ├── src/services/    # Wails API 适配层
 ├── build/               # 构建资源与安装程序配置
-├── Dockerfile           # Web 版构建文件
-├── docker-compose.yml   # Docker 编排配置
 └── README.md
 ```
 

@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 )
 
@@ -25,22 +27,17 @@ func (e *Extractor) extractFromDocx(ctx context.Context, fileData []byte, fields
 		return nil, ErrCancelled
 	}
 
-	text, err := extractTextFromDocx(ctx, fileData)
+	text, err := extractTextFromDocx(ctx, fileData, e.logger)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(fields) == 0 {
-		for k := range PatternRegistry {
-			fields = append(fields, k)
-		}
-	}
-
+	// fields 为空时 parseCases 默认提取全部已注册字段
 	return e.parseCases(text, fields), nil
 }
 
 // extractTextFromDocx 核心 DOCX 文本提取逻辑。
-func extractTextFromDocx(ctx context.Context, fileData []byte) (string, error) {
+func extractTextFromDocx(ctx context.Context, fileData []byte, logger *slog.Logger) (string, error) {
 	r, err := zip.NewReader(bytes.NewReader(fileData), int64(len(fileData)))
 	if err != nil {
 		return "", err
@@ -71,8 +68,13 @@ func extractTextFromDocx(ctx context.Context, fileData []byte) (string, error) {
 
 	tokenCount := 0
 	for {
-		t, _ := decoder.Token()
+		t, tokenErr := decoder.Token()
 		if t == nil {
+			// 损坏的 XML 中途断流时 Token 返回非 EOF 错误：
+			// 记录日志避免文本被静默截断而无从排查。
+			if tokenErr != nil && !errors.Is(tokenErr, io.EOF) && logger != nil {
+				logger.Warn("DOCX XML 解析中途终止，提取文本可能不完整", "error", tokenErr)
+			}
 			break
 		}
 		tokenCount++

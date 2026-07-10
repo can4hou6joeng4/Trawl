@@ -8,6 +8,29 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+// exportColumnOrder 是导出列的固定顺序，CSV 与 Excel 保持一致口径。
+var exportColumnOrder = []string{"page", "defendant", "idNumber", "request", "factsReason"}
+
+// exportHeaders 扫描全部记录的字段并集，按固定顺序返回列 key 与中文表头。
+// 记录字段天然异构（仅匹配成功的字段才会写入），因此不能只看第一条记录，
+// 否则第一条缺失的字段会导致整列静默丢失。
+func exportHeaders(records []Record) (keys []string, headers []string) {
+	present := make(map[string]bool)
+	for _, r := range records {
+		for k := range r {
+			present[k] = true
+		}
+	}
+
+	for _, k := range exportColumnOrder {
+		if present[k] {
+			keys = append(keys, k)
+			headers = append(headers, PatternRegistry[k].Label)
+		}
+	}
+	return keys, headers
+}
+
 func writeCSV(path string, records []Record) error {
 	file, err := os.Create(path)
 	if err != nil {
@@ -26,25 +49,11 @@ func writeCSV(path string, records []Record) error {
 		return nil
 	}
 
-	// 1. Determine Headers from the first record and PatternRegistry
-	// We want to keep a consistent order if possible
-	var keys []string
-	var headers []string
-
-	// Order based on PatternRegistry for consistency
-	orderedKeys := []string{"defendant", "idNumber", "request", "factsReason"}
-	for _, k := range orderedKeys {
-		if _, ok := records[0][k]; ok {
-			keys = append(keys, k)
-			headers = append(headers, PatternRegistry[k].Label)
-		}
-	}
-
+	keys, headers := exportHeaders(records)
 	if err := w.Write(headers); err != nil {
 		return err
 	}
 
-	// 2. Write Data
 	for _, r := range records {
 		row := make([]string, len(keys))
 		for i, k := range keys {
@@ -96,16 +105,7 @@ func ExportExcel(path string, records []Record) error {
 		return nil
 	}
 
-	// 1. Determine Headers
-	var keys []string
-	var headers []string
-	orderedKeys := []string{"page", "defendant", "idNumber", "request", "factsReason"}
-	for _, k := range orderedKeys {
-		if _, ok := records[0][k]; ok {
-			keys = append(keys, k)
-			headers = append(headers, PatternRegistry[k].Label)
-		}
-	}
+	keys, headers := exportHeaders(records)
 
 	// Set headers
 	for i, header := range headers {
@@ -118,7 +118,7 @@ func ExportExcel(path string, records []Record) error {
 		}
 	}
 
-	// 2. Set values
+	// Set values
 	wrapStyle, _ := f.NewStyle(&excelize.Style{
 		Alignment: &excelize.Alignment{
 			WrapText: true,
@@ -143,12 +143,24 @@ func ExportExcel(path string, records []Record) error {
 		}
 	}
 
-	// Set column widths for better readability
-	if err := f.SetColWidth(sheetName, "A", "B", 20); err != nil {
-		return err
+	// 按字段设置列宽提高可读性（长文本字段更宽）
+	columnWidths := map[string]float64{
+		"page":        8,
+		"defendant":   20,
+		"idNumber":    24,
+		"request":     50,
+		"factsReason": 50,
 	}
-	if err := f.SetColWidth(sheetName, "C", "D", 50); err != nil {
-		return err
+	for i, k := range keys {
+		col, err := excelize.ColumnNumberToName(i + 1)
+		if err != nil {
+			return err
+		}
+		if width, ok := columnWidths[k]; ok {
+			if err := f.SetColWidth(sheetName, col, col, width); err != nil {
+				return err
+			}
+		}
 	}
 
 	if err := f.SaveAs(path); err != nil {

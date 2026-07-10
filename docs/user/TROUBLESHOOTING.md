@@ -46,15 +46,11 @@
 
 **解决方案：**
 
-**桌面版用户：**
-最新版本（v2.1.1+）已内置 API 密钥，无需手动配置。如果仍有问题，请下载最新版本。
+**解决方案：**
+确认已在配置文件或开发环境变量中配置百度 Token：
 
-**Web/Docker 用户：**
-设置环境变量后重启容器：
 ```bash
-export LEGAL_EXTRACTOR_BAIDU_API_KEY="your_key"
-export LEGAL_EXTRACTOR_BAIDU_SECRET_KEY="your_secret"
-docker-compose down && docker-compose up -d
+export LEGAL_EXTRACTOR_BAIDU_TOKEN="your_token"
 ```
 
 ---
@@ -125,7 +121,7 @@ docker-compose down && docker-compose up -d
 |------|----------|
 | `wails: command not found` | 运行 `go install github.com/wailsapp/wails/v2/cmd/wails@latest` |
 | `npm ERR! missing script: build` | 运行 `cd frontend && npm install` |
-| `baked_conf.yaml not found` | 创建 `internal/config/baked_conf.yaml` 文件（可为空） |
+| `BAIDU_TOKEN_MISSING` | 在 `config/conf.yaml` 或 `LEGAL_EXTRACTOR_BAIDU_TOKEN` 中配置百度 Token |
 
 ---
 
@@ -137,7 +133,7 @@ go test ./internal/... -v
 ```
 
 如果测试失败，请检查：
-1. Go 版本是否为 1.24+
+1. Go 版本是否为 1.25+
 2. 是否已安装所有依赖（`go mod tidy`）
 
 ---

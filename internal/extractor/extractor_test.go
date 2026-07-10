@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -203,11 +205,23 @@ func TestExtractData_UnsupportedFormat(t *testing.T) {
 	}
 }
 
-func TestExtractData_ImageDisabled(t *testing.T) {
+func TestExtractData_ImageWithoutToken(t *testing.T) {
+	// 图片识别依赖百度云端 OCR；未配置 Token 时应返回 ErrTokenMissing
+	// 而非不支持的格式（测试环境不初始化 config，Token 恒为空）。
 	e := NewExtractor(nil)
-	_, err := e.ExtractData(context.Background(), []byte("data"), "test.jpg", []string{"defendant"}, nil)
-	if !errors.Is(err, ErrUnsupportedFormat) {
-		t.Fatalf("expected ErrUnsupportedFormat for image, got %v", err)
+	for _, name := range []string{"test.jpg", "test.jpeg", "test.png"} {
+		_, err := e.ExtractData(context.Background(), []byte("data"), name, []string{"defendant"}, nil)
+		if !errors.Is(err, ErrTokenMissing) {
+			t.Fatalf("%s: expected ErrTokenMissing, got %v", name, err)
+		}
+	}
+}
+
+func TestExtractData_EmptyFile(t *testing.T) {
+	e := NewExtractor(nil)
+	_, err := e.ExtractData(context.Background(), nil, "test.pdf", []string{"defendant"}, nil)
+	if !errors.Is(err, ErrEmptyFile) {
+		t.Fatalf("expected ErrEmptyFile, got %v", err)
 	}
 }
 
@@ -244,7 +258,7 @@ func TestDefaultPatterns(t *testing.T) {
 }
 
 func TestExtractTextFromDocx_InvalidData(t *testing.T) {
-	_, err := extractTextFromDocx(context.Background(), []byte("not a valid zip"))
+	_, err := extractTextFromDocx(context.Background(), []byte("not a valid zip"), nil)
 	if err == nil {
 		t.Error("无效 docx 数据应返回错误")
 	}
@@ -257,9 +271,38 @@ func TestExtractTextFromDocx_EmptyZip(t *testing.T) {
 	f.Write([]byte("<root/>"))
 	w.Close()
 
-	_, err := extractTextFromDocx(context.Background(), buf.Bytes())
+	_, err := extractTextFromDocx(context.Background(), buf.Bytes(), nil)
 	if err == nil {
 		t.Error("缺少 document.xml 的 zip 应返回错误")
+	}
+}
+
+// TestParseCases_EmptyFieldsDefaultsToAll 回归测试：WinOCR 路径以 nil fields
+// 调用 parseCases，空字段列表必须默认提取全部字段而非什么都不提取。
+func TestParseCases_EmptyFieldsDefaultsToAll(t *testing.T) {
+	e := NewExtractor(nil)
+	text := `
+民 事 起 诉 状
+
+被 告： 张三
+身份证号码： 110101199001011234
+
+诉讼请求：
+请求偿还借款。
+
+事实与理由：
+被告借款未还。
+此致
+`
+	result := e.parseCases(text, nil)
+	if len(result) != 1 {
+		t.Fatalf("空字段列表应默认提取全部字段, got %d records", len(result))
+	}
+	if result[0]["defendant"] != "张三" {
+		t.Errorf("defendant = %q, want %q", result[0]["defendant"], "张三")
+	}
+	if result[0]["idNumber"] != "110101199001011234" {
+		t.Errorf("idNumber = %q, want %q", result[0]["idNumber"], "110101199001011234")
 	}
 }
 
@@ -295,5 +338,20 @@ func TestExtractData_ContextCancelled(t *testing.T) {
 	_, err := e.ExtractData(ctx, []byte("data"), "test.pdf", []string{"defendant"}, nil)
 	if !errors.Is(err, ErrCancelled) {
 		t.Fatalf("expected ErrCancelled when ctx cancelled, got %v", err)
+	}
+}
+
+func TestExtractViaWinOcr_NonWindowsReturnsTokenMissing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows uses the local OCR bridge path")
+	}
+
+	e := NewExtractor(nil)
+	_, err := e.extractViaWinOcr(context.Background(), []byte("%PDF-1.7"), 1, nil)
+	if !errors.Is(err, ErrTokenMissing) {
+		t.Fatalf("expected ErrTokenMissing on non-Windows, got %v", err)
+	}
+	if strings.Contains(err.Error(), "WinOcrBridge.exe") {
+		t.Fatalf("non-Windows error should not mention WinOcrBridge.exe: %v", err)
 	}
 }

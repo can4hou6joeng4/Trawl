@@ -7,8 +7,8 @@ import (
 
 // 预编译正则，避免每次函数调用重复编译
 var (
-	reHTML      = regexp.MustCompile(`<[^>]*>`)
-	reHeader    = regexp.MustCompile(`^(?i)(诉讼请求|事实与理由|事实和理由|事实经过)[:：\s]*`)
+	reHTML       = regexp.MustCompile(`<[^>]*>`)
+	reHeader     = regexp.MustCompile(`^(?i)(诉讼请求|事实与理由|事实和理由|事实经过)[:：\s]*`)
 	reColonSplit = regexp.MustCompile(`[:：]`)
 )
 

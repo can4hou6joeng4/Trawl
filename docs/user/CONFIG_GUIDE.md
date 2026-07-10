@@ -13,22 +13,24 @@ Legal Extractor v3.0 已全面迁移至百度 AI 引擎。为了处理 PDF 文�
 
 ## 步骤 2：配置软件
 
-### 方式一：修改配置文件 (推荐)
+### 方式一：修改用户配置文件 (推荐)
 
-在项目目录下找到或创建 `internal/config/baked_conf.yaml`：
+在应用程序同级目录或开发项目根目录创建 `config/conf.yaml`：
 
 ```yaml
 baidu:
   token: "您的百度AccessToken"
 ```
 
-### 方式二：环境变量 (Docker/开发环境)
+### 方式二：环境变量 (开发环境)
 
 设置环境变量：
 
 ```bash
-export BAIDU_TOKEN="您的AccessToken"
+export LEGAL_EXTRACTOR_BAIDU_TOKEN="您的AccessToken"
 ```
+
+> 公开发布包不会内置任何云服务 Token。请勿把个人 Token 写入源码目录或提交到 Git。
 
 ## 常见问题
 

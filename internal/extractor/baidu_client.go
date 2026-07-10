@@ -5,20 +5,21 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"legal-extractor/internal/config"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
-	"github.com/dslipak/pdf"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 )
 
-// BaiduClient 百度 AI Studio PaddleOCR 客户端
+// BaiduClient 百度 AI Studio PaddleOCR 客户端。
+//
+// 配置（Token / ApiUrl）在每次调用时从 config 实时读取，
+// 用户补填 conf.yaml 或环境变量后无需重启应用。
 type BaiduClient struct {
-	config     config.BaiduConfig
 	httpClient *http.Client
 	logger     *slog.Logger
 }
@@ -42,129 +43,105 @@ func NewBaiduClient(logger *slog.Logger) *BaiduClient {
 		logger = slog.Default()
 	}
 	return &BaiduClient{
-		config: config.GetBaidu(),
 		httpClient: &http.Client{
-			Timeout: 180 * time.Second, // 增加到 180 秒，为复杂长文档预留充足处理时间
+			Timeout: 180 * time.Second, // 复杂长文档需要充足的云端处理时间
 		},
 		logger: logger,
 	}
 }
 
-// ParseDocument 调用百度 Layout Parsing 接口解析文档
-func (c *BaiduClient) ParseDocument(ctx context.Context, fileData []byte, isPdf bool, onProgress ProgressCallback) ([]Record, error) {
-	c.logger.Info("开始调用百度 OCR 接口", "isPdf", isPdf, "dataSize", len(fileData))
-	if len(fileData) == 0 {
-		return nil, fmt.Errorf("文件内容为空")
-	}
+// HasToken 返回当前配置是否已提供云端 OCR Token。
+func (c *BaiduClient) HasToken() bool {
+	return config.GetBaidu().Token != ""
+}
 
-	if c.config.Token == "" {
+// httpStatusError 标记云端返回的非 200 状态码，供重试逻辑做类型化判断，
+// 避免对错误文本做字符串匹配。
+type httpStatusError struct {
+	StatusCode int
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("百度 API 响应异常 (HTTP %d)", e.StatusCode)
+}
+
+// isRetryableStatus 仅对云端 5xx 状态错误重试。
+func isRetryableStatus(err error) bool {
+	var se *httpStatusError
+	return errors.As(err, &se) && se.StatusCode >= 500
+}
+
+// ParseDocument 调用百度 Layout Parsing 接口解析文档。
+//
+// totalPages 由调用方传入（extractPdf 已完成多库回退的页数探测，图片固定为 1），
+// 避免此处重复解析；超过分块阈值的 PDF 会被物理切片后逐块识别。
+func (c *BaiduClient) ParseDocument(ctx context.Context, fileData []byte, totalPages int, isPdf bool, onProgress ProgressCallback) ([]Record, error) {
+	c.logger.Info("开始调用百度 OCR 接口", "isPdf", isPdf, "totalPages", totalPages, "dataSize", len(fileData))
+	if len(fileData) == 0 {
+		return nil, ErrEmptyFile
+	}
+	if !c.HasToken() {
 		return nil, fmt.Errorf("%w: 请检查 config/conf.yaml", ErrTokenMissing)
 	}
+	if totalPages < 1 {
+		totalPages = 1
+	}
 
-	// 1. 处理超长文档 (百度 API 限制单次 100 页)
+	// 1. 获取所有页面的 Markdown（超过阈值的 PDF 物理分块，防止云端超时）
+	const maxPagesPerChunk = 20 // 小分块粒度显著提升云端解析稳定性
+
 	var allPagesMarkdown []string
-	const maxPagesPerChunk = 20 // 调小切片粒度（从50改为20）以显著提升云端解析的稳定性
+	switch {
+	case isPdf && totalPages > maxPagesPerChunk:
+		c.logger.Info("启用大文件物理分块处理模式", "chunkSize", maxPagesPerChunk)
+		for start := 1; start <= totalPages; start += maxPagesPerChunk {
+			end := min(start+maxPagesPerChunk-1, totalPages)
+			pages, err := c.parseChunkWithRetry(ctx, fileData, start, end, totalPages, onProgress)
+			if err != nil {
+				return nil, err
+			}
+			allPagesMarkdown = append(allPagesMarkdown, pages...)
 
-	if isPdf {
-		// 获取总页数
-		r, err := pdf.NewReader(bytes.NewReader(fileData), int64(len(fileData)))
-		if err == nil {
-			totalPages := r.NumPage()
-			c.logger.Info("PDF 页数检测完成", "totalPages", totalPages)
-
-			if totalPages > maxPagesPerChunk {
-				c.logger.Info("启用大文件物理分块处理模式", "chunkSize", maxPagesPerChunk)
-				// 分块处理逻辑
-				for start := 1; start <= totalPages; start += maxPagesPerChunk {
-					end := start + maxPagesPerChunk - 1
-					if end > totalPages {
-						end = totalPages
-					}
-
-					c.logger.Info(fmt.Sprintf("正在处理分块: 第 %d-%d 页", start, end))
-					if onProgress != nil {
-						onProgress(start, totalPages, "正在分析文档结构并准备解析...")
-					}
-
-					// 1. 物理切片操作
-					var chunkBuffer bytes.Buffer
-					pageSelection := []string{fmt.Sprintf("%d-%d", start, end)}
-					err := api.Trim(bytes.NewReader(fileData), &chunkBuffer, pageSelection, nil)
-					if err != nil {
-						return nil, fmt.Errorf("PDF 切片失败: %w", err)
-					}
-
-					// 2. 实施“避让重试”策略处理云端 500 错误
-					var pages []string
-					maxRetries := 2
-					for retry := 0; retry <= maxRetries; retry++ {
-						if retry > 0 {
-							c.logger.Warn(fmt.Sprintf("分块 %d-%d 尝试第 %d 次重试...", start, end, retry))
-							if err := sleepCtx(ctx, 20*time.Second); err != nil {
-							return nil, ErrCancelled
-						}
-						}
-
-						if onProgress != nil {
-							onProgress(start, totalPages, fmt.Sprintf("正在对第 %d-%d 页进行深度识别...", start, end))
-						}
-
-						pages, err = c.callBaiduAPI(ctx, chunkBuffer.Bytes(), true, onProgress)
-						if err == nil {
-							break
-						}
-
-						// 如果是 500 错误且还有重试机会
-						if strings.Contains(err.Error(), "500") && retry < maxRetries {
-							continue
-						}
-						return nil, err // 其他严重错误或重试耗尽则退出
-					}
-
-					allPagesMarkdown = append(allPagesMarkdown, pages...)
-
-					// 3. 强制冷却，防止连续高压导致百度后端崩溃
-					if end < totalPages {
-						c.logger.Info("分块处理完成，进入 10 秒冷却期以释放云端算力...")
-						if err := sleepCtx(ctx, 10*time.Second); err != nil {
-							return nil, ErrCancelled
-						}
-					}
+			// 强制冷却，防止连续高压导致百度后端崩溃
+			if end < totalPages {
+				c.logger.Info("分块处理完成，进入 10 秒冷却期以释放云端算力...")
+				if err := sleepCtx(ctx, 10*time.Second); err != nil {
+					return nil, ErrCancelled
 				}
-			} else {
-				if onProgress != nil {
-					onProgress(1, totalPages, "正在进行深度识别与内容校对，请稍候...")
-				}
-				pages, err := c.callBaiduAPI(ctx, fileData, true, onProgress)
-				if err != nil {
-					return nil, err
-				}
-				allPagesMarkdown = append(allPagesMarkdown, pages...)
 			}
 		}
-	} else {
+	case isPdf:
 		if onProgress != nil {
-			onProgress(1, 1, "正在对文档进行语义化识别...")
+			onProgress(1, totalPages, "正在进行深度识别与内容校对，请稍候...")
+		}
+		pages, err := c.callBaiduAPI(ctx, fileData, true, onProgress)
+		if err != nil {
+			return nil, err
+		}
+		allPagesMarkdown = pages
+	default: // 图片
+		if onProgress != nil {
+			onProgress(1, 1, "正在对图片进行语义化识别...")
 		}
 		pages, err := c.callBaiduAPI(ctx, fileData, false, onProgress)
 		if err != nil {
 			return nil, err
 		}
-		allPagesMarkdown = append(allPagesMarkdown, pages...)
+		allPagesMarkdown = pages
 	}
 
 	// 2. 按页解析汇总后的 Markdown
 	c.logger.Info("所有页面识别完成，开始按页提取法律实体", "totalFetchedPages", len(allPagesMarkdown))
 	var allRecords []Record
-	totalPages := len(allPagesMarkdown)
+	fetched := len(allPagesMarkdown)
 	for i, pageMd := range allPagesMarkdown {
-		if onProgress != nil {
-			// 增加微小延迟 (50ms)，让前端有足够时间渲染进度条的跳动，避免瞬间完成
-			time.Sleep(50 * time.Millisecond)
-			onProgress(i+1, totalPages, fmt.Sprintf("正在结构化提取第 %d/%d 页的法律信息...", i+1, totalPages))
+		if err := ctx.Err(); err != nil {
+			return nil, ErrCancelled
 		}
-		records := ParseMarkdown(pageMd)
-		for _, rec := range records {
+		if onProgress != nil {
+			onProgress(i+1, fetched, fmt.Sprintf("正在结构化提取第 %d/%d 页的法律信息...", i+1, fetched))
+		}
+		for _, rec := range ParseMarkdown(pageMd) {
 			// 标注准确的页码
 			if rec["page"] == "" {
 				rec["page"] = fmt.Sprintf("%d", i+1)
@@ -175,6 +152,43 @@ func (c *BaiduClient) ParseDocument(ctx context.Context, fileData []byte, isPdf 
 
 	c.logger.Info("数据提取完成", "recordCount", len(allRecords))
 	return allRecords, nil
+}
+
+// parseChunkWithRetry 物理切出 [start, end] 页并调用云端识别，
+// 云端 5xx 时执行“避让重试”（最多 2 次，间隔 20 秒）。
+func (c *BaiduClient) parseChunkWithRetry(ctx context.Context, fileData []byte, start, end, totalPages int, onProgress ProgressCallback) ([]string, error) {
+	c.logger.Info(fmt.Sprintf("正在处理分块: 第 %d-%d 页", start, end))
+	if onProgress != nil {
+		onProgress(start, totalPages, "正在分析文档结构并准备解析...")
+	}
+
+	var chunkBuffer bytes.Buffer
+	pageSelection := []string{fmt.Sprintf("%d-%d", start, end)}
+	if err := api.Trim(bytes.NewReader(fileData), &chunkBuffer, pageSelection, nil); err != nil {
+		return nil, fmt.Errorf("PDF 切片失败: %w", err)
+	}
+
+	const maxRetries = 2
+	for retry := 0; ; retry++ {
+		if retry > 0 {
+			c.logger.Warn(fmt.Sprintf("分块 %d-%d 尝试第 %d 次重试...", start, end, retry))
+			if err := sleepCtx(ctx, 20*time.Second); err != nil {
+				return nil, ErrCancelled
+			}
+		}
+
+		if onProgress != nil {
+			onProgress(start, totalPages, fmt.Sprintf("正在对第 %d-%d 页进行深度识别...", start, end))
+		}
+
+		pages, err := c.callBaiduAPI(ctx, chunkBuffer.Bytes(), true, onProgress)
+		if err == nil {
+			return pages, nil
+		}
+		if !isRetryableStatus(err) || retry >= maxRetries {
+			return nil, err
+		}
+	}
 }
 
 // callBaiduAPI 封装底层的 API 调用逻辑
@@ -199,13 +213,14 @@ func (c *BaiduClient) callBaiduAPI(ctx context.Context, fileData []byte, isPdf b
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.config.ApiUrl, bytes.NewBuffer(jsonBody))
+	baidu := config.GetBaidu()
+	req, err := http.NewRequestWithContext(ctx, "POST", baidu.ApiUrl, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("token %s", c.config.Token))
+	req.Header.Set("Authorization", fmt.Sprintf("token %s", baidu.Token))
 
 	// 开启心跳协程，在长耗时请求期间持续反馈进度，防止 UI “假死”
 	done := make(chan bool)
@@ -242,9 +257,8 @@ func (c *BaiduClient) callBaiduAPI(ctx context.Context, fileData []byte, isPdf b
 	defer func() { _ = resp.Body.Close() }()
 	c.logger.Info("百度 API 响应接收成功", "status", resp.Status, "duration", time.Since(apiStart))
 
-	// 增加状态码校验：非 200 状态码一律视为失败，触发重试
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("百度 API 响应异常 (HTTP %d)", resp.StatusCode)
+		return nil, &httpStatusError{StatusCode: resp.StatusCode}
 	}
 
 	var ocrResp BaiduOCRResponse

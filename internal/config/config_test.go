@@ -162,14 +162,6 @@ func TestGetBaidu(t *testing.T) {
 	}
 }
 
-func TestLoadConfig(t *testing.T) {
-	// 走兼容 API
-	c, err := LoadConfig("")
-	// 不关心是否成功（取决于环境），只要不 panic
-	_ = c
-	_ = err
-}
-
 func TestIsActivated_NoViper(t *testing.T) {
 	origV := v
 	v = nil

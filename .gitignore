@@ -1,6 +1,7 @@
 build/bin
 node_modules
-frontend/dist
+frontend/dist/*
+!frontend/dist/.gitkeep
 frontend/coverage
 
 .agent
@@ -18,6 +19,7 @@ build/pdf_extractor_core/
 *.spec
 
 # Wails (keep wailsjs/ tracked for CI builds)
+frontend/package.json.md5
 
 # System Files
 .DS_Store

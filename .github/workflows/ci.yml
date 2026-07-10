@@ -21,18 +21,11 @@ jobs:
           go-version-file: "go.mod"
           cache: true
 
-      - name: Create embedded config for compilation
-        run: |
-          mkdir -p internal/config
-          echo 'baidu:
-            token: ""
-            api_url: ""' > internal/config/baked_conf.yaml
-
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.5.0
-          args: ./internal/... ./cmd/...
+          args: ./internal/... .
 
   test:
     name: Test
@@ -45,15 +38,8 @@ jobs:
           go-version-file: "go.mod"
           cache: true
 
-      - name: Create embedded config for compilation
-        run: |
-          mkdir -p internal/config
-          echo 'baidu:
-            token: ""
-            api_url: ""' > internal/config/baked_conf.yaml
-
       - name: Run tests with coverage
-        run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./internal/... ./cmd/...
+        run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./internal/... .
 
       - name: Upload coverage to Codecov
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -75,15 +61,8 @@ jobs:
           go-version-file: "go.mod"
           cache: true
 
-      - name: Create embedded config for compilation
-        run: |
-          mkdir -p internal/config
-          echo 'baidu:
-            token: ""
-            api_url: ""' > internal/config/baked_conf.yaml
-
       - name: Verify build
-        run: go build ./internal/... ./cmd/...
+        run: go build ./internal/... .
 
   frontend-test:
     name: Frontend Test
@@ -93,7 +72,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 

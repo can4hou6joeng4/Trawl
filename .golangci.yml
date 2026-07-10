@@ -3,6 +3,14 @@ version: "2"
 run:
   timeout: 5m
 
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    paths:
+      - frontend
+      - build
+
 linters:
   enable:
     - errcheck

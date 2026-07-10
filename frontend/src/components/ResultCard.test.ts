@@ -6,7 +6,6 @@ import ResultCard from './ResultCard.vue'
 // 否则 mock 工厂里引用的变量还未初始化。
 const { mockApi } = vi.hoisted(() => ({
   mockApi: {
-    isDesktop: false,
     service: {
       openFile: vi.fn().mockResolvedValue(undefined),
       selectFile: vi.fn().mockResolvedValue(null),

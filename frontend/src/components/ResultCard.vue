@@ -40,9 +40,12 @@ async function handleOpenFile(path: string) {
       </div>
 
       <div v-if="result.success" class="result-body">
-        <div class="stat-item">
-          <span class="label">提取记录</span>
-          <span class="value">{{ result.recordCount }}</span>
+        <div class="result-summary">
+          <div class="stat-item">
+            <span class="label">提取记录</span>
+            <span class="value">{{ result.recordCount }}</span>
+          </div>
+          <p class="success-note">结果文件已生成，可直接打开核对。</p>
         </div>
         <div v-if="result.outputPath" class="path-box">
           <span class="label">保存至：</span>
@@ -56,6 +59,7 @@ async function handleOpenFile(path: string) {
       </div>
       <div v-else class="result-body" role="alert" aria-live="assertive">
         <p class="error-msg">{{ result.errorMessage }}</p>
+        <p class="error-hint">请检查文件格式、提取字段或保存位置后重试。</p>
       </div>
     </div>
   </Transition>
@@ -74,10 +78,16 @@ async function handleOpenFile(path: string) {
   border-radius: var(--radius-lg);
   padding: var(--spacing-md);
   border-left: 4px solid var(--success);
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(56, 189, 248, 0.04)),
+    rgba(15, 23, 42, 0.66);
 }
 
 .result-card.error {
   border-left-color: var(--error);
+  background:
+    linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(245, 158, 11, 0.04)),
+    rgba(15, 23, 42, 0.66);
 }
 
 .result-header {
@@ -89,17 +99,34 @@ async function handleOpenFile(path: string) {
 
 .status-icon {
   font-size: 1.5rem;
+  align-items: center;
+  background: rgba(16, 185, 129, 0.12);
+  border-radius: 8px;
+  color: var(--success);
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.result-card.error .status-icon {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
 }
 
 .result-body {
   margin-left: calc(1.5rem + var(--spacing-sm));
 }
 
+.result-summary {
+  display: grid;
+  gap: 4px;
+}
+
 .stat-item {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  margin-bottom: var(--spacing-xs);
 }
 
 .stat-item .value {
@@ -120,6 +147,14 @@ async function handleOpenFile(path: string) {
   gap: 4px;
 }
 
+.success-note,
+.error-hint {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
 .path-box code {
   color: var(--accent-primary);
   word-break: break-all;
@@ -137,6 +172,7 @@ async function handleOpenFile(path: string) {
 
 .error-msg {
   color: var(--error);
+  margin: 0 0 6px;
 }
 
 /* Transitions */

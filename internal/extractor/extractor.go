@@ -58,6 +58,9 @@ func (e *Extractor) ExtractData(ctx context.Context, fileData []byte, fileName s
 	if err := ctx.Err(); err != nil {
 		return nil, ErrCancelled
 	}
+	if len(fileData) == 0 {
+		return nil, ErrEmptyFile
+	}
 	e.logger.Info("开始提取数据", "file", fileName, "size", len(fileData), "fields", fields)
 	ext := strings.ToLower(filepath.Ext(fileName))
 
@@ -74,8 +77,12 @@ func (e *Extractor) ExtractData(ctx context.Context, fileData []byte, fileName s
 	switch ext {
 	case ".pdf":
 		records, err = e.extractPdf(ctx, fileData, fields, onProgress)
-	case ".jpg", ".png", ".jpeg":
-		return nil, fmt.Errorf("图片识别功能已暂时禁用（仅支持PDF）: %w", ErrUnsupportedFormat)
+	case ".jpg", ".jpeg", ".png":
+		if !e.baiduClient.HasToken() {
+			return nil, fmt.Errorf("%w: 图片识别需要配置百度 OCR Token", ErrTokenMissing)
+		}
+		e.logger.Info("使用 [百度云端引擎] 识别图片", "file", fileName)
+		records, err = e.baiduClient.ParseDocument(ctx, fileData, 1, false, onProgress)
 	case ".docx":
 		e.logger.Info("使用本地原生逻辑提取 DOCX", "file", fileName)
 		records, err = e.extractFromDocx(ctx, fileData, fields)

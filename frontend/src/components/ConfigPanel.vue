@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import { api } from "../services";
+import { computed, ref, watch } from "vue";
+import { api, type FieldOption } from "../services";
 
 const props = defineProps<{
-  selectedFile: string | File;
+  selectedFile: string;
   fileName: string;
   selectedFormat: "xlsx" | "csv" | "json";
-  outputOutputPath: string;
+  outputPath: string;
   isLoading: boolean;
   isDisabled?: boolean;
   selectedFields: string[];
@@ -14,14 +14,29 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "update:selectedFormat", value: string): void;
-  (e: "update:outputOutputPath", value: string): void;
+  (e: "update:outputPath", value: string): void;
   (e: "update:selectedFields", value: string[]): void;
   (e: "preview"): void;
   (e: "extract"): void;
 }>();
 
-const availableFields = ref<any[]>([]);
+const availableFields = ref<FieldOption[]>([]);
 const isScanning = ref(false);
+
+const selectedFieldCount = computed(() => props.selectedFields.length);
+const canPreview = computed(
+  () => !props.isLoading && !props.isDisabled && !isScanning.value && selectedFieldCount.value > 0,
+);
+const canExtract = computed(
+  () => canPreview.value && Boolean(props.outputPath),
+);
+const extractHint = computed(() => {
+  if (props.isDisabled) return "试用期结束，核心功能已锁定";
+  if (isScanning.value) return "正在加载可提取字段...";
+  if (selectedFieldCount.value === 0) return "请至少保留 1 个提取字段";
+  if (!props.outputPath) return "请选择导出位置后开始提取";
+  return "准备就绪";
+});
 
 // Icon mapping for fields
 function getFieldIcon(key: string) {
@@ -50,7 +65,7 @@ watch(
       availableFields.value = fields || [];
 
       if (fields && fields.length > 0) {
-        emit("update:selectedFields", fields.map((f: any) => f.key));
+        emit("update:selectedFields", fields.map((f) => f.key));
       } else {
         emit("update:selectedFields", []);
       }
@@ -80,8 +95,6 @@ function toggleField(key: string) {
 
 async function handleSelectOutput() {
   if (!props.selectedFile || props.isDisabled) return;
-  // Web 模式不支持选择输出路径
-  if (api.isWeb) return;
 
   const ext = props.selectedFormat;
   const baseName =
@@ -90,7 +103,7 @@ async function handleSelectOutput() {
   try {
     const path = await api.service.selectOutputPath(baseName);
     if (path) {
-      emit("update:outputOutputPath", path);
+      emit("update:outputPath", path);
       if (path.toLowerCase().endsWith(".json"))
         emit("update:selectedFormat", "json");
       else if (path.toLowerCase().endsWith(".csv"))
@@ -112,12 +125,12 @@ async function handleSelectOutput() {
            <div class="header-left">
                <span class="config-label">提取字段</span>
                <span v-if="!isScanning && availableFields.length > 0" class="badge">
-                 {{ availableFields.length }}
+                 已选 {{ selectedFieldCount }}/{{ availableFields.length }}
                </span>
            </div>
            
            <span v-if="isScanning" class="status-text blink">
-               <span class="loader-mini"></span> 分析结构中...
+               <span class="loader-mini"></span> 加载字段...
            </span>
         </div>
         
@@ -197,11 +210,11 @@ async function handleSelectOutput() {
         <div class="config-cell flex-grow">
            <label class="cell-label">导出位置</label>
            <div class="path-input-group">
-               <div class="path-display" :class="{ placeholder: !outputOutputPath }" :title="outputOutputPath || '请选择保存位置'">
+               <div class="path-display" :class="{ placeholder: !outputPath }" :title="outputPath || '请选择保存位置'">
                  <span class="path-icon">
                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
                  </span>
-                 <span class="path-text">{{ outputOutputPath || "请选择保存位置..." }}</span>
+                 <span class="path-text">{{ outputPath || "请选择保存位置..." }}</span>
                </div>
                <button class="btn-icon-only" @click="handleSelectOutput" :disabled="isDisabled" title="更改位置">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -209,6 +222,10 @@ async function handleSelectOutput() {
            </div>
         </div>
       </div>
+
+      <p class="config-hint" :class="{ ready: canExtract }">
+        {{ extractHint }}
+      </p>
     </div>
 
     <!-- Actions -->
@@ -216,7 +233,7 @@ async function handleSelectOutput() {
       <button
         class="btn btn-secondary"
         @click="emit('preview')"
-        :disabled="isLoading || isDisabled"
+        :disabled="!canPreview"
       >
         <span class="btn-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -227,7 +244,7 @@ async function handleSelectOutput() {
       <button
         class="btn btn-primary btn-glow"
         @click="emit('extract')"
-        :disabled="isLoading || isDisabled || !outputOutputPath"
+        :disabled="!canExtract"
       >
         <span v-if="isLoading" class="loader"></span>
         <span v-else class="btn-content">
@@ -240,19 +257,16 @@ async function handleSelectOutput() {
 
 <style scoped>
 .glass-panel {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  background: rgba(2, 6, 23, 0.22);
+  border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .output-config {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
-  padding: 24px;
-  border-radius: 16px;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 8px;
 }
 
 /* Header */
@@ -260,7 +274,7 @@ async function handleSelectOutput() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .header-left {
@@ -271,15 +285,16 @@ async function handleSelectOutput() {
 
 .config-label, .cell-label {
   color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-weight: 500;
-  letter-spacing: 0.5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .badge {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(148, 163, 184, 0.14);
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
@@ -306,7 +321,7 @@ async function handleSelectOutput() {
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: 10px;
   align-items: stretch; /* Ensure all items in a row have equal height */
 }
 
@@ -324,30 +339,30 @@ async function handleSelectOutput() {
 .card-content {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.56);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  transition: all 0.2s ease;
   height: 100%; /* Fill card height */
 }
 
 .icon-box {
-  width: 36px; /* Slightly larger icon box */
-  height: 36px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0; /* Prevent shrinking */
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 6px;
   color: var(--text-muted);
   transition: all 0.3s ease;
 }
 
 .field-label {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   color: var(--text-secondary);
   flex: 1;
   font-weight: 500;
@@ -356,29 +371,29 @@ async function handleSelectOutput() {
 }
 
 .check-mark {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(148, 163, 184, 0.12);
   color: transparent;
   transition: all 0.3s ease;
 }
 
 /* Active State */
 .field-card.active .card-content {
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.15), rgba(64, 158, 255, 0.05));
-  border-color: rgba(64, 158, 255, 0.4);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.1);
+  background: rgba(34, 197, 94, 0.10);
+  border-color: rgba(34, 197, 94, 0.34);
+  box-shadow: none;
 }
 
 .field-card.active .icon-box {
   background: var(--accent-primary);
-  color: white;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
+  color: #04130a;
+  box-shadow: none;
 }
 
 .field-card.active .field-label {
@@ -397,16 +412,16 @@ async function handleSelectOutput() {
 }
 
 .field-card:hover .card-content {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: none;
 }
 
 /* Grid Layout for config */
 .grid-row {
   display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 20px;
+  grid-template-columns: 190px 1fr;
+  gap: 12px;
   align-items: end;
 }
 
@@ -425,12 +440,12 @@ async function handleSelectOutput() {
 .custom-select {
   width: 100%;
   appearance: none;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(148, 163, 184, 0.14);
   color: var(--text-primary);
   padding: 0 14px; /* 调整内边距配合固定高度 */
-  border-radius: 10px;
-  font-size: 0.95rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
   outline: none;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -489,14 +504,14 @@ async function handleSelectOutput() {
 
 .path-display {
   flex: 1;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
   padding: 0 14px;
   display: flex;
   align-items: center;
   gap: 10px; /* 稍微加大间距更专业 */
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   color: var(--text-primary);
   overflow: hidden;
   height: 40px; /* 统一高度标准 */
@@ -537,9 +552,9 @@ async function handleSelectOutput() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -564,24 +579,35 @@ async function handleSelectOutput() {
 }
 
 .skeleton-chip {
-  height: 56px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
+  height: 52px;
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 8px;
   animation: pulse 1.5s infinite;
 }
 
 .divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-  margin: 16px 0;
+  background: rgba(148, 163, 184, 0.12);
+  margin: 2px 0;
+}
+
+.config-hint {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  margin: -2px 0 0;
+}
+
+.config-hint.ready {
+  color: var(--accent-primary);
 }
 
 /* Actions */
 .actions {
   display: flex;
-  gap: 16px;
-  justify-content: center;
-  margin-top: 16px; /* 缩小与配置区域的间距 */
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 .btn {
@@ -589,16 +615,22 @@ async function handleSelectOutput() {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 28px;
-  border-radius: 12px;
+  padding: 11px 18px;
+  border-radius: 9px;
   font-weight: 600;
-  font-size: 1rem;
-  letter-spacing: 0.5px;
+  font-size: 0.9rem;
+  letter-spacing: 0;
   cursor: pointer;
   border: none;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 140px;
-  line-height: 1; /* 修正文字垂直偏离 */
+  transition: all 0.2s ease;
+  min-width: 122px;
+  line-height: 1;
+}
+
+.btn-secondary {
+  background: rgba(15, 23, 42, 0.62);
+  color: var(--text-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .btn-content, .btn-icon {
@@ -613,8 +645,9 @@ async function handleSelectOutput() {
 }
 
 .btn-primary.btn-glow {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  box-shadow: 0 4px 20px rgba(64, 158, 255, 0.3);
+  background: var(--accent-primary);
+  color: #04130a;
+  box-shadow: 0 8px 20px rgba(34, 197, 94, 0.18);
   position: relative;
   overflow: hidden;
 }
@@ -636,8 +669,8 @@ async function handleSelectOutput() {
 }
 
 .btn-primary.btn-glow:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(64, 158, 255, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(34, 197, 94, 0.22);
 }
 
 .btn:disabled,
@@ -659,11 +692,11 @@ async function handleSelectOutput() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px;
+  padding: 24px;
   gap: 12px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.42);
+  border-radius: 8px;
+  border: 1px dashed rgba(148, 163, 184, 0.16);
 }
 
 .empty-icon {
@@ -680,5 +713,24 @@ async function handleSelectOutput() {
 @keyframes rotation {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@media (max-width: 720px) {
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-row {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    justify-content: stretch;
+  }
+
+  .btn {
+    flex: 1;
+    min-width: 0;
+  }
 }
 </style>

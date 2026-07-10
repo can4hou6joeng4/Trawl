@@ -4,7 +4,6 @@ import PreviewTable from './PreviewTable.vue'
 
 const { mockApi } = vi.hoisted(() => ({
   mockApi: {
-    isDesktop: false,
     service: {
       openFile: vi.fn().mockResolvedValue(undefined),
       selectFile: vi.fn().mockResolvedValue(null),

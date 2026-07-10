@@ -18,9 +18,9 @@
   <a href="https://codecov.io/gh/can4hou6joeng4/legal-extractor"><img src="https://img.shields.io/codecov/c/github/can4hou6joeng4/legal-extractor?style=flat-square&label=Coverage" alt="Coverage"></a>
   <a href="https://goreportcard.com/report/github.com/can4hou6joeng4/legal-extractor"><img src="https://goreportcard.com/badge/github.com/can4hou6joeng4/legal-extractor?style=flat-square" alt="Go Report Card"></a>
   <a href="https://github.com/can4hou6joeng4/legal-extractor/blob/main/LICENSE"><img src="https://img.shields.io/github/license/can4hou6joeng4/legal-extractor?style=flat-square" alt="License"></a>
-  <img src="https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat-square&logo=go" alt="Go Version">
+  <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go" alt="Go Version">
   <img src="https://img.shields.io/badge/Vue-3.x-4FC08D?style=flat-square&logo=vue.js" alt="Vue Version">
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Docker-blue?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-blue?style=flat-square" alt="Platform">
 </p>
 
 ---
@@ -40,32 +40,16 @@
 - 🧩 **Physical Slicing** - Support for 50+ pages long PDF documents.
 - 👁️ **Live Preview** - Preview data before extraction to ensure accuracy.
 - 💾 **Multi-format Export** - Support Excel (.xlsx), CSV, and JSON.
-- 🐳 **Docker Ready** - Built-in Docker support for easy deployment.
 
 ---
 
 ## 🚀 Quick Start
 
-### 🅰️ Desktop Version (Recommended for Individuals)
-
 1. Download the installer for your platform from [Releases](https://github.com/can4hou6joeng4/legal-extractor/releases)
-2. **macOS**: Download `.dmg`, open and drag to Applications
-3. **Windows**: Run `legal-extractor_setup.exe` installer
+2. **macOS Intel / Apple Silicon**: Download the universal `.dmg`, open it, and drag the app to Applications
+3. **Windows x64**: Run the `windows_amd64_setup.exe` installer
 
-### 🅱️ Web Version (Recommended for Teams/Servers)
-
-Run the following command to start the Web version instantly:
-
-```bash
-# 1. Set your Baidu Token (Required for PDF OCR)
-export LEGAL_EXTRACTOR_BAIDU_TOKEN="your_baidu_token"
-
-# 2. Start with Docker Compose
-docker-compose up -d
-
-# 3. Access in Browser
-# http://localhost:8080
-```
+Windows ARM64 native builds are tracked as a separate release target because the Windows OCR bridge also needs a verified ARM64 artifact.
 
 ### Usage
 
@@ -79,10 +63,9 @@ docker-compose up -d
 
 ### Prerequisites
 
-- Go 1.24+
-- Node.js 18+
-- [Wails CLI](https://wails.io/docs/gettingstarted/installation) (For Desktop)
-- Docker & Docker Compose (For Web)
+- Go 1.25+
+- Node.js 22+
+- [Wails CLI](https://wails.io/docs/gettingstarted/installation)
 
 ### Setup
 
@@ -95,31 +78,9 @@ cd legal-extractor
 cd frontend && npm install && cd ..
 ```
 
-### Dev Mode
-
-#### Desktop (Wails)
 ```bash
 wails dev
 ```
-
-#### Web (Backend + Frontend)
-For full stack development with hot reload:
-
-1. **Start Backend (Go)**
-   ```bash
-   # Install Air for hot reload
-   go install github.com/air-verse/air@latest
-
-   # Run
-   air
-   ```
-
-2. **Start Frontend (Vite)**
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-   Open http://localhost:5173 (API requests will be proxied to backend)
 
 ---
 
@@ -147,17 +108,14 @@ baidu:
 
 ```
 legal-extractor/
-├── cmd/
-│   └── server/          # Web Server Entrypoint (REST API)
+├── main.go              # Wails desktop entrypoint
 ├── internal/            # Core logic
 │   ├── app/             # Desktop App Logic (Wails bindings)
 │   ├── config/          # Configuration management
 │   ├── extractor/       # Extraction Engine (PDF/DOCX/OCR)
-├── frontend/            # Vue 3 Frontend (Adaptive UI)
-│   ├── src/services/    # API Adapter (Web/Desktop)
-├── build/               # Build assets & installers
-├── Dockerfile           # Web Version Dockerfile
-├── docker-compose.yml   # Docker Compose Config
+├── frontend/            # Vue 3 Desktop UI
+│   ├── src/services/    # Wails API adapter
+├── build/               # Build assets & installer config
 └── README.md
 ```
 

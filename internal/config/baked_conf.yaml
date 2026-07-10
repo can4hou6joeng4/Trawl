@@ -1,4 +1,0 @@
-# 内置预设配置（构建时由 CI 注入实际值）
-baidu:
-  token: ""
-  api_url: "https://n1544et5uec1tbh9.aistudio-app.com/layout-parsing"

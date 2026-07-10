@@ -1,10 +1,7 @@
 package config
 
 import (
-	"bytes"
-	_ "embed"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,8 +14,6 @@ import (
 var (
 	// BuildTime is injected via -ldflags at build time (Unix timestamp)
 	BuildTime string = ""
-	// EmbeddedBaiduToken is injected via -ldflags at build time
-	EmbeddedBaiduToken string = ""
 )
 
 const TrialDurationDays = 7
@@ -70,9 +65,6 @@ func GetTrialStatus() TrialStatus {
 	}
 }
 
-//go:embed baked_conf.yaml
-var bakedConfig []byte
-
 // Config 应用配置结构
 type Config struct {
 	Baidu BaiduConfig `mapstructure:"baidu"`
@@ -103,8 +95,8 @@ func Init(configPath string) error {
 		baseDir = "." // 回退到当前目录
 	}
 
-	// 设置默认值
-	v.SetDefault("baidu.token", EmbeddedBaiduToken)
+	// 设置默认值。云 OCR Token 必须来自用户本地配置或环境变量，公开构建不内置密钥。
+	v.SetDefault("baidu.token", "")
 	v.SetDefault("baidu.api_url", "https://n1544et5uec1tbh9.aistudio-app.com/layout-parsing")
 
 	// 绑定环境变量 (前缀 LEGAL_EXTRACTOR_)
@@ -120,7 +112,7 @@ func Init(configPath string) error {
 		v.SetConfigName("conf")
 		v.SetConfigType("yaml")
 		v.AddConfigPath(filepath.Join(baseDir, "config")) // 1. 锁定可执行文件同级的 config 目录
-		v.AddConfigPath(baseDir)                           // 2. 锁定可执行文件同级
+		v.AddConfigPath(baseDir)                          // 2. 锁定可执行文件同级
 		v.AddConfigPath("./config")                       // 3. 兼容开发模式：当前工作目录下的 config
 		v.AddConfigPath(".")                              // 4. 兼容开发模式：当前工作目录
 	}
@@ -128,34 +120,14 @@ func Init(configPath string) error {
 	// 尝试读取配置文件
 	err = v.ReadInConfig()
 
-	// 判断是否需要加载内置配置 (Baked Config)
-	useBaked := false
 	if err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			useBaked = true
-		} else {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return fmt.Errorf("读取配置文件失败: %w", err)
-		}
-	} else {
-		// 文件读取成功，检查是否为空配置且无内置 Token
-		if v.GetString("baidu.token") == "" && EmbeddedBaiduToken == "" {
-			log.Println("未检测到百度云密钥，尝试加载内置配置")
-			useBaked = true
-		}
-	}
-
-	// 加载内置配置
-	if useBaked && len(bakedConfig) > 0 {
-		v.SetConfigType("yaml")
-		if loadErr := v.MergeConfig(bytes.NewBuffer(bakedConfig)); loadErr != nil {
-			log.Printf("加载内置配置失败: %v\n", loadErr)
-		} else {
-			log.Println("已加载内置预设配置")
 		}
 	}
 
 	// 如果最终密钥仍然为空，且之前是因为文件不存在才进来的，则创建默认模板
-	if v.GetString("baidu.token") == "" && EmbeddedBaiduToken == "" {
+	if v.GetString("baidu.token") == "" {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			defaultPath := filepath.Join(baseDir, "config", "conf.yaml")
 			if createErr := ensureConfigFile(defaultPath); createErr != nil {
@@ -220,12 +192,4 @@ func GetBaidu() BaiduConfig {
 		return BaiduConfig{}
 	}
 	return cfg.Baidu
-}
-
-// LoadConfig 兼容旧 API，内部调用 Init
-func LoadConfig(path string) (*Config, error) {
-	if err := Init(path); err != nil {
-		return nil, err
-	}
-	return Get(), nil
 }

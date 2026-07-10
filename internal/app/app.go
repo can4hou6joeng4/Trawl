@@ -62,14 +62,14 @@ func (a *App) Activate(licenseKey string) (bool, error) {
 	return false, fmt.Errorf("授权码无效，请检查后重试")
 }
 
-// SelectFile opens a file dialog to select a .docx file
+// SelectFile opens a file dialog to select a supported legal document.
 func (a *App) SelectFile() (string, error) {
 	file, err := wr.OpenFileDialog(a.ctx, wr.OpenDialogOptions{
-		Title: "Select Legal Document (.docx)",
+		Title: "Select Legal Document",
 		Filters: []wr.FileFilter{
 			{
-				DisplayName: "Legal Documents (*.docx;*.pdf)",
-				Pattern:     "*.docx;*.pdf",
+				DisplayName: "Legal Documents (*.docx;*.pdf;*.jpg;*.jpeg;*.png)",
+				Pattern:     "*.docx;*.pdf;*.jpg;*.jpeg;*.png",
 			},
 		},
 	})
@@ -148,17 +148,32 @@ func (a *App) SelectOutputPath(defaultName string) (string, error) {
 	return outputFile, nil
 }
 
-// ExtractToPath processes the input file and saves to the specific output path
-func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) ExtractResult {
-	// 检查试用期状态
-	status := config.GetTrialStatus()
-	if status.IsExpired {
-		return ExtractResult{
-			Success:      false,
-			ErrorMessage: "试用期已结束（限 7 天），功能已锁定。请联系开发者获取正式版。",
-		}
+// errTrialExpired 试用期结束的稳定文案，PreviewData 与 ExtractToPath 共用。
+var errTrialExpired = errors.New("试用期已结束（限 7 天），功能已锁定。请联系开发者获取正式版。")
+
+// runExtraction 是 PreviewData 与 ExtractToPath 的公共骨架：
+// 试用校验 → 读取本地文件 → 在可取消的 ctx 中执行提取。
+func (a *App) runExtraction(inputPath string, fields []string) ([]extractor.Record, error) {
+	if config.GetTrialStatus().IsExpired {
+		return nil, errTrialExpired
 	}
 
+	// 适配器层：负责读取本地文件
+	fileData, err := os.ReadFile(inputPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取文件失败: %w", err)
+	}
+	if len(fileData) == 0 {
+		return nil, fmt.Errorf("%w，请检查文件是否损坏", extractor.ErrEmptyFile)
+	}
+
+	ctx := a.startExtraction()
+	defer a.finishExtraction()
+	return a.extractor.ExtractData(ctx, fileData, inputPath, fields, a.emitExtractionProgress)
+}
+
+// ExtractToPath processes the input file and saves to the specific output path
+func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) ExtractResult {
 	if inputPath == "" || outputPath == "" {
 		return ExtractResult{
 			Success:      false,
@@ -166,25 +181,7 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 		}
 	}
 
-	// 适配器层：负责读取本地文件
-	fileData, err := os.ReadFile(inputPath)
-	if err != nil {
-		return ExtractResult{
-			Success:      false,
-			ErrorMessage: fmt.Sprintf("读取文件失败: %v", err),
-		}
-	}
-
-	// 1. Extract Data (per-call cancellable ctx)
-	ctx := a.startExtraction()
-	defer a.finishExtraction()
-	records, err := a.extractor.ExtractData(ctx, fileData, inputPath, fields, func(current, total int, message string) {
-		wr.EventsEmit(a.ctx, "extraction_progress", map[string]interface{}{
-			"current": current,
-			"total":   total,
-			"message": message,
-		})
-	})
+	records, err := a.runExtraction(inputPath, fields)
 	if err != nil {
 		return ExtractResult{
 			Success:      false,
@@ -195,11 +192,11 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 	if len(records) == 0 {
 		return ExtractResult{
 			Success:      false,
-			ErrorMessage: "未在文档中找到可提取的记录",
+			ErrorMessage: extractor.ErrNoRecords.Error(),
 		}
 	}
 
-	// 2. Save based on extension
+	// Save based on extension
 	return a.ExportData(records, outputPath)
 }
 
@@ -239,15 +236,6 @@ func (a *App) ExportData(records []extractor.Record, outputPath string) ExtractR
 // PreviewData extracts and returns records for preview (without saving)
 func (a *App) PreviewData(inputPath string, fields []string) ExtractResult {
 	a.extractor.Logger().Info("收到预览请求", "path", inputPath)
-	// 检查试用期状态
-	status := config.GetTrialStatus()
-	if status.IsExpired {
-		return ExtractResult{
-			Success:      false,
-			ErrorMessage: "试用期已结束（限 7 天），预览功能已锁定。请联系开发者获取正式版。",
-		}
-	}
-
 	if inputPath == "" {
 		return ExtractResult{
 			Success:      false,
@@ -255,36 +243,18 @@ func (a *App) PreviewData(inputPath string, fields []string) ExtractResult {
 		}
 	}
 
-	// 适配器层：负责读取本地文件
-	fileData, err := os.ReadFile(inputPath)
+	records, err := a.runExtraction(inputPath, fields)
 	if err != nil {
 		return ExtractResult{
 			Success:      false,
-			ErrorMessage: fmt.Sprintf("读取文件失败: %v", err),
+			ErrorMessage: friendlyExtractError(err),
 		}
 	}
 
-	// 检查文件内容是否为空
-	if len(fileData) == 0 {
+	if len(records) == 0 {
 		return ExtractResult{
 			Success:      false,
-			ErrorMessage: "文件内容为空，请检查文件是否损坏",
-		}
-	}
-
-	ctx := a.startExtraction()
-	defer a.finishExtraction()
-	records, err := a.extractor.ExtractData(ctx, fileData, inputPath, fields, func(current, total int, message string) {
-		wr.EventsEmit(a.ctx, "extraction_progress", map[string]interface{}{
-			"current": current,
-			"total":   total,
-			"message": message,
-		})
-	})
-	if err != nil {
-		return ExtractResult{
-			Success:      false,
-			ErrorMessage: fmt.Sprintf("预览失败: %v", err),
+			ErrorMessage: extractor.ErrNoRecords.Error(),
 		}
 	}
 
@@ -314,6 +284,25 @@ func (a *App) OpenFile(path string) error {
 		cmd = exec.Command("xdg-open", path)
 	}
 	return cmd.Start()
+}
+
+func (a *App) emitExtractionProgress(current, total int, message string) {
+	if a.ctx == nil || a.ctx.Value("frontend") == nil {
+		if a.extractor != nil {
+			a.extractor.Logger().Debug("跳过进度事件：Wails 上下文尚未初始化", "current", current, "total", total)
+		}
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			a.extractor.Logger().Warn("发送进度事件失败，已忽略", "recover", r)
+		}
+	}()
+	wr.EventsEmit(a.ctx, "extraction_progress", map[string]interface{}{
+		"current": current,
+		"total":   total,
+		"message": message,
+	})
 }
 
 // friendlyExtractError converts known sentinel errors into a stable code string
