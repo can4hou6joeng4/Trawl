@@ -1,54 +1,46 @@
-@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700&family=Lato:wght@300;400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap');
 
 :root {
     /* ============================
-       Trust & Authority Palette (Dark Theme)
+       取证台 Evidence Desk 色板
        Target: Legal Extractor
        ============================ */
 
     /* Fonts */
-    --font-heading: 'EB Garamond', serif;
-    --font-body: 'Lato', system-ui, sans-serif;
+    --font-body: 'Lato', -apple-system, 'SF Pro Text', 'PingFang SC', 'Noto Sans SC', sans-serif;
+    --font-mono: 'SF Mono', 'JetBrains Mono', Menlo, 'PingFang SC', monospace;
 
     /* Backgrounds */
-    --bg-primary: #0c1018;
-    --bg-secondary: #171c26;
+    --bg-primary: #07100c;
+    --bg-secondary: #0a1610;
+
+    /* Surfaces */
+    --surface-panel: rgba(13, 26, 18, 0.75);
+    --surface-panel-soft: rgba(13, 26, 18, 0.4);
+    --surface-border: rgba(84, 140, 105, 0.22);
+    --surface-border-strong: rgba(84, 140, 105, 0.4);
 
     /* Text */
-    --text-primary: #F8FAFC;
-    --text-secondary: #CBD5E1;
-    --text-muted: #94A3B8;
+    --text-primary: #e8f5ec;
+    --text-secondary: #b7d5c1;
+    --text-muted: #6f9a7f;
+    --text-faint: rgba(111, 154, 127, 0.7);
 
-    /* Branding Colors */
-    --accent-primary: #22C55E;
-    --accent-secondary: #38BDF8;
-
-    /* Glows */
-    --accent-glow: rgba(34, 197, 94, 0.08);
-    --accent-secondary-glow: rgba(56, 189, 248, 0.08);
+    /* Accent */
+    --accent-primary: #34d879;
+    --accent-deep: #18b25d;
+    --accent-soft: #9fdcb4;
 
     /* Functional Colors */
-    --success: #10b981;
-    --error: #ef4444;
-    --warning: #f59e0b;
-    --info: #0EA5E9;
-
-    /* Borders & Glass */
-    --surface-border: rgba(148, 163, 184, 0.16);
-    --glass-bg: rgba(15, 23, 42, 0.72);
-
-    /* Spacing System */
-    --spacing-xs: 0.5rem;
-    --spacing-sm: 1rem;
-    --spacing-md: 1.5rem;
-    --spacing-lg: 2rem;
-    --spacing-xl: 3rem;
+    --success: #34d879;
+    --error: #ff6b5e;
+    --warning: #e8c468;
+    --info: #38bdf8;
 
     /* BorderRadius */
     --radius-sm: 0.25rem;
     --radius-md: 0.5rem;
     --radius-lg: 0.75rem;
-    --radius-xl: 1rem;
     --radius-full: 9999px;
 
     /* Transitions */
@@ -68,22 +60,10 @@ body {
     color: var(--text-primary);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
-.font-heading {
-    font-family: var(--font-heading);
-}
-
-.glass-panel {
-    background: var(--glass-bg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--surface-border);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-}
-
-/* 按钮基础样式优化 */
+/* 按钮基础样式 */
 .btn {
     transition: var(--transition-normal);
     cursor: pointer;
@@ -96,4 +76,19 @@ body {
 
 .btn:active {
     transform: translateY(0);
+}
+
+/* 细滚动条（记录列表等内部滚动区域） */
+.scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(84, 140, 105, 0.4) transparent;
+}
+
+.scroll-thin::-webkit-scrollbar {
+    width: 6px;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb {
+    background: rgba(84, 140, 105, 0.4);
+    border-radius: 3px;
 }

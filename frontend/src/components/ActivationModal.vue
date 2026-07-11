@@ -43,37 +43,38 @@ function submit() {
 <template>
   <Transition name="fade">
     <div v-if="show" class="modal-overlay">
-      <div class="activation-card glass-panel">
+      <div class="activation-card">
         <div class="modal-header">
-          <h2 class="font-heading">软件激活中心</h2>
-          <button class="close-btn" @click="emit('close')">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          <h2>软件激活</h2>
+          <button class="close-btn" type="button" @click="emit('close')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
 
         <div class="modal-body">
           <div class="info-section">
-            <label>您的设备特征码</label>
+            <label>设备特征码 · 点击复制</label>
             <div class="machine-id-box" @click="copyMachineID">
               <code>{{ machineID }}</code>
               <svg class="copy-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
             </div>
-            <p class="helper-text">请将上方代码发送给开发者以获取授权码</p>
+            <p class="helper-text">请将上方特征码发送给开发者以获取授权码</p>
           </div>
 
           <div class="input-section">
-            <label>输入授权码</label>
+            <label>授权码</label>
             <input
               v-model="licenseKey"
               type="text"
               placeholder="XXXX-XXXX-XXXX-XXXX"
               class="license-input"
+              spellcheck="false"
               @keyup.enter="submit"
             />
           </div>
 
-          <button class="btn btn-primary btn-glow full-width" @click="submit" :disabled="!isValidLicense">
-            立即激活专业版
+          <button class="btn btn-primary" type="button" :disabled="!isValidLicense" @click="submit">
+            激活专业版
           </button>
         </div>
       </div>
@@ -85,143 +86,149 @@ function submit() {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(2, 6, 23, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(4, 10, 7, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 5000;
 }
 
-/* 原 App.vue 作用域内的 glass-panel 增强（拆分后子组件内部元素
-   无法继承父作用域样式，此处保持视觉一致） */
-.glass-panel {
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(148, 163, 184, 0.16);
-}
-
 .activation-card {
-  width: 90%;
-  max-width: 440px;
-  padding: 40px;
-  border-radius: 24px;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  position: relative;
-  animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes modalIn {
-  from { opacity: 0; transform: scale(0.9) translateY(20px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  width: 400px;
+  max-width: 90%;
+  background: #0c1811;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 14px;
+  padding: 26px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7);
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 
 .modal-header h2 {
-  font-size: 1.6rem;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .close-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: none;
+  border: none;
   color: var(--text-muted);
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  padding: 4px;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  border-radius: 6px;
+  transition: all 0.15s;
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
+  color: var(--error);
+  background: rgba(255, 107, 94, 0.1);
 }
 
 .modal-body {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
 }
 
-.info-section label, .input-section label {
+.info-section label,
+.input-section label {
   display: block;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  margin-bottom: 10px;
-  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
 }
 
 .machine-id-box {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(14, 165, 233, 0.2);
-  padding: 14px 18px;
-  border-radius: 12px;
   display: flex;
-  justify-content: center; /* 3. Centered */
-  position: relative;      /* For absolute positioning of icon */
   align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(4, 23, 12, 0.6);
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 9px;
+  padding: 13px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: border-color 0.15s;
 }
 
 .machine-id-box:hover {
   border-color: var(--accent-primary);
-  background: rgba(14, 165, 233, 0.08);
 }
 
 .machine-id-box code {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
+  font-size: 17px;
+  letter-spacing: 3px;
   color: var(--accent-primary);
-  font-size: 1.2rem;
-  letter-spacing: 2px;
-  font-weight: 600;
 }
 
 .machine-id-box .copy-icon {
-  position: absolute;
-  right: 18px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+}
+
+.helper-text {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 8px;
 }
 
 .license-input {
   width: 100%;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 14px 18px;
-  border-radius: 12px;
+  background: rgba(4, 23, 12, 0.6);
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 9px;
+  padding: 12px;
   color: var(--text-primary);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 1.1rem;
-  outline: none;
-  transition: all 0.3s ease;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 2px;
   text-align: center;
+  outline: none;
+  transition: border-color 0.15s;
 }
 
 .license-input:focus {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15);
 }
 
-.full-width {
+.btn-primary {
   width: 100%;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem !important;
+  background: var(--accent-primary);
+  color: #04170c;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 12px;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-primary:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
