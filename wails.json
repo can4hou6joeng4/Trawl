@@ -13,9 +13,9 @@
   "info": {
     "productName": "legal-extractor",
     "companyName": "LegalTech",
-    "productVersion": "3.3.0",
-    "copyright": "Copyright 2024"
+    "productVersion": "4.0.0",
+    "copyright": "Copyright 2026"
   },
   "wailsjsdir": "./frontend",
-  "version": "3.3.0"
+  "version": "4.0.0"
 }

@@ -33,12 +33,12 @@
 
 ## ✨ Features
 
-- 🚀 **v3.0 Next-Gen Engine** - Powered by Baidu AI Studio for high-precision legal document analysis.
-- 📄 **Smart Parsing** - Auto-detect structure of `.docx` and `.pdf` legal documents.
+- 🗂️ **v4.0 Evidence Desk UI** - Source pages and structured records side by side, with one-click locate from record to page.
+- 📄 **Smart Parsing** - Auto-detect `.docx`, `.pdf`, and image (`.jpg` / `.png`) legal documents.
+- ✏️ **Review-then-Export** - Edit extracted values directly on record cards; manual corrections flow into the export.
+- 🎯 **Precise Extraction** - Extract key fields (defendant, ID, requests, facts) with per-field visibility toggles.
 - ⚡ **Parallel Processing** - 300% faster text extraction using Go Goroutines.
-- 🎯 **Precise Extraction** - Extract key fields like defendant, ID, requests, and facts.
 - 🧩 **Physical Slicing** - Support for 50+ pages long PDF documents.
-- 👁️ **Live Preview** - Preview data before extraction to ensure accuracy.
 - 💾 **Multi-format Export** - Support Excel (.xlsx), CSV, and JSON.
 
 ---
@@ -53,9 +53,9 @@ Windows ARM64 native builds are tracked as a separate release target because the
 
 ### Usage
 
-1. Click **"Select Files"** to choose legal documents
-2. Click **"Preview"** to verify extracted data (Optional)
-3. Click **"Extract & Save"** to export structured data
+1. **Drag in or click to select** a legal document — parsing starts automatically and lands on the Evidence Desk
+2. Review records on the desk: click any field to correct it, toggle field visibility, or hit **"Locate"** to jump to the source page
+3. Pick an export format (XLSX / CSV / JSON) and click **"Export"** — manual corrections are saved with the file
 
 ---
 
