@@ -33,6 +33,8 @@ export interface IApiService {
   selectOutputPath(defaultName: string): Promise<string>;
   scanFields(filePath: string): Promise<FieldOption[]>;
   openFile(path: string): Promise<void>;
+  /** 读取最近一次解析的文书内容（base64），供原文页面渲染 */
+  readCurrentDocument(): Promise<string>;
   getTrialStatus(): Promise<TrialStatus>;
   getMachineID(): Promise<string>;
   activate(licenseKey: string): Promise<boolean>;
@@ -73,6 +75,11 @@ class DesktopAdapter implements IApiService {
   async openFile(path: string): Promise<void> {
     const { OpenFile } = await import('../../wailsjs/go/app/App');
     return OpenFile(path);
+  }
+
+  async readCurrentDocument(): Promise<string> {
+    const { ReadCurrentDocument } = await import('../../wailsjs/go/app/App');
+    return ReadCurrentDocument();
   }
 
   async getTrialStatus(): Promise<TrialStatus> {

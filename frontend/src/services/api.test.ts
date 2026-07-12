@@ -8,6 +8,7 @@ const wailsMethods = vi.hoisted(() => ({
   SelectOutputPath: vi.fn(),
   ScanFields: vi.fn(),
   OpenFile: vi.fn(),
+  ReadCurrentDocument: vi.fn(),
   GetTrialStatus: vi.fn(),
   GetMachineID: vi.fn(),
   Activate: vi.fn(),
@@ -39,5 +40,12 @@ describe('desktop api service', () => {
     const { getApiService } = await import('./api');
     await getApiService().cancelExtraction();
     expect(wailsMethods.CancelExtraction).toHaveBeenCalledTimes(1);
+  });
+
+  it('delegates current document read to Wails', async () => {
+    wailsMethods.ReadCurrentDocument.mockResolvedValue('QUJD');
+    const { getApiService } = await import('./api');
+    await expect(getApiService().readCurrentDocument()).resolves.toBe('QUJD');
+    expect(wailsMethods.ReadCurrentDocument).toHaveBeenCalledTimes(1);
   });
 });

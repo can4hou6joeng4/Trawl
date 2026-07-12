@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -25,6 +26,11 @@ type App struct {
 	// extraction is in flight; calling it aborts that extraction.
 	cancelMu sync.Mutex
 	cancelFn context.CancelFunc
+
+	// docMu guards currentDocPath：最近一次成功读取并送入提取的文书路径。
+	// ReadCurrentDocument 只允许读取该文件（最小权限，不暴露任意路径读取）。
+	docMu          sync.Mutex
+	currentDocPath string
 }
 
 // NewApp creates a new App application struct
@@ -167,9 +173,43 @@ func (a *App) runExtraction(inputPath string, fields []string) ([]extractor.Reco
 		return nil, fmt.Errorf("%w，请检查文件是否损坏", extractor.ErrEmptyFile)
 	}
 
+	a.docMu.Lock()
+	a.currentDocPath = inputPath
+	a.docMu.Unlock()
+
 	ctx := a.startExtraction()
 	defer a.finishExtraction()
 	return a.extractor.ExtractData(ctx, fileData, inputPath, fields, a.emitExtractionProgress)
+}
+
+// maxDocumentBytes 限制原文回读的文件大小，防止超大文件经 base64 放大后
+// 撑爆 WebView 桥接与前端内存（UI 宣称单文件 ≤ 50MB，这里放宽到 100MB）。
+const maxDocumentBytes = 100 << 20
+
+// ReadCurrentDocument 返回最近一次解析的文书内容（base64 编码），
+// 供前端 pdf.js 渲染原文页面。仅允许读取当前文书，不接受任意路径。
+func (a *App) ReadCurrentDocument() (string, error) {
+	a.docMu.Lock()
+	path := a.currentDocPath
+	a.docMu.Unlock()
+
+	if path == "" {
+		return "", fmt.Errorf("当前没有已解析的文书")
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("读取文书失败: %w", err)
+	}
+	if info.Size() > maxDocumentBytes {
+		return "", fmt.Errorf("文书过大（%d MB），暂不支持原文预览", info.Size()>>20)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("读取文书失败: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
 }
 
 // ExtractToPath processes the input file and saves to the specific output path

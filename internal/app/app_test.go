@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -140,5 +141,52 @@ func TestPreviewData_NoRecordsReturnsError(t *testing.T) {
 	}
 	if res.ErrorMessage == "" {
 		t.Fatal("必须返回错误信息")
+	}
+}
+
+func TestReadCurrentDocument_NoDocument(t *testing.T) {
+	a := newTestAppWithExtractor()
+
+	_, err := a.ReadCurrentDocument()
+	if err == nil {
+		t.Fatal("未解析任何文书时应返回错误")
+	}
+}
+
+func TestReadCurrentDocument_ReturnsBase64OfExtractedFile(t *testing.T) {
+	a := newTestAppWithExtractor()
+
+	// 通过正常提取路径登记当前文书（.txt 会在格式检查处失败，但文件读取已完成）
+	content := []byte("%PDF-1.7 fake content")
+	docPath := filepath.Join(t.TempDir(), "doc.txt")
+	if err := os.WriteFile(docPath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+	_ = a.PreviewData(docPath, nil)
+
+	got, err := a.ReadCurrentDocument()
+	if err != nil {
+		t.Fatalf("ReadCurrentDocument 失败: %v", err)
+	}
+	want := base64.StdEncoding.EncodeToString(content)
+	if got != want {
+		t.Fatalf("base64 内容不一致: got %q want %q", got, want)
+	}
+}
+
+func TestReadCurrentDocument_FileRemoved(t *testing.T) {
+	a := newTestAppWithExtractor()
+
+	docPath := filepath.Join(t.TempDir(), "doc.txt")
+	if err := os.WriteFile(docPath, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_ = a.PreviewData(docPath, nil)
+	if err := os.Remove(docPath); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := a.ReadCurrentDocument(); err == nil {
+		t.Fatal("文书被删除后应返回错误")
 	}
 }

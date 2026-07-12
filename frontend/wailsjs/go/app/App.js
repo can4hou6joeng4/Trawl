@@ -34,6 +34,10 @@ export function PreviewData(arg1, arg2) {
   return window['go']['app']['App']['PreviewData'](arg1, arg2);
 }
 
+export function ReadCurrentDocument() {
+  return window['go']['app']['App']['ReadCurrentDocument']();
+}
+
 export function ScanFields(arg1) {
   return window['go']['app']['App']['ScanFields'](arg1);
 }

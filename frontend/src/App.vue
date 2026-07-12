@@ -33,6 +33,8 @@
       <div v-else class="desk">
         <DocPane
           :fileName="fileName"
+          :kind="fileKind"
+          :docData="docData"
           :currentPage="curPage"
           :totalPages="totalPages"
           :recordPages="recordPages"
@@ -40,6 +42,7 @@
           @update:currentPage="curPage = $event"
           @locate="locateFromPage"
           @close="resetToLanding"
+          @loaded="docNumPages = $event"
         />
 
         <section class="respane">
@@ -130,6 +133,9 @@ const outputPath = ref("");
 const format = ref<ExportFormat>("xlsx");
 const exporting = ref(false);
 const exportDone = ref<{ path: string; count: number; edited: boolean } | null>(null);
+// 原文内容（base64）与 pdf.js 上报的真实总页数
+const docData = ref<string | null>(null);
+const docNumPages = ref<number | null>(null);
 
 const isLoading = ref(false);
 const { notification, showNotification } = useNotification();
@@ -186,6 +192,13 @@ const fileName = computed(() => {
   return selectedFile.value.split(/[\\/]/).pop() || "";
 });
 
+const fileKind = computed<"pdf" | "image" | "docx">(() => {
+  const n = fileName.value.toLowerCase();
+  if (n.endsWith(".pdf")) return "pdf";
+  if (n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png")) return "image";
+  return "docx";
+});
+
 const fieldOptions = computed(() =>
   FIELD_ORDER.filter((k) => k in fieldLabels.value).map((k) => ({
     key: k,
@@ -210,8 +223,8 @@ const recordPages = computed(() => {
   return [...pages].sort((a, b) => a - b);
 });
 
-// 后端仅返回记录，不返回文档总页数；阶段一以已知记录页的最大值为导航上限。
-const totalPages = computed(() => Math.max(1, ...recordPages.value));
+// 后端仅返回记录页码；PDF 由 pdf.js 上报真实总页数，其余取已知记录页最大值。
+const totalPages = computed(() => Math.max(docNumPages.value || 1, ...recordPages.value, 1));
 
 const recordsOnPage = computed(() =>
   records.value
@@ -227,6 +240,9 @@ async function handleFile(path: string) {
   editedSet.value = new Set();
   exportDone.value = null;
   outputPath.value = "";
+  docLoadToken += 1;
+  docData.value = null;
+  docNumPages.value = null;
   stage.value = "parsing";
   isLoading.value = true;
   resetProgress();
@@ -241,6 +257,7 @@ async function handleFile(path: string) {
       curPage.value = Number(res.records[0].page) || 1;
       stage.value = "desk";
       showNotification(`解析完成：提取到 ${res.records.length} 条记录`, "success");
+      void loadDocForViewer();
     } else {
       stage.value = "landing";
       if (isCancelledError(res.errorMessage)) {
@@ -258,11 +275,31 @@ async function handleFile(path: string) {
   }
 }
 
+// 异步加载原文内容供左栏渲染；失败不阻断流程（DocPane 回退占位页）。
+// docLoadToken 使换文件后仍在途的旧响应作废，防止旧文书内容覆盖 docData。
+let docLoadToken = 0;
+
+async function loadDocForViewer() {
+  if (fileKind.value === "docx") return;
+  const token = ++docLoadToken;
+  try {
+    const data = await api.service.readCurrentDocument();
+    if (token === docLoadToken) {
+      docData.value = data;
+    }
+  } catch (e) {
+    console.error("读取原文失败:", e);
+  }
+}
+
 function resetToLanding() {
   stage.value = "landing";
   selectedFile.value = null;
   records.value = [];
   exportDone.value = null;
+  docLoadToken += 1;
+  docData.value = null;
+  docNumPages.value = null;
 }
 
 // ── 记录交互 ──

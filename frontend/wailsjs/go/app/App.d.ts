@@ -20,6 +20,8 @@ export function OpenFile(arg1:string):Promise<void>;
 
 export function PreviewData(arg1:string,arg2:Array<string>):Promise<app.ExtractResult>;
 
+export function ReadCurrentDocument():Promise<string>;
+
 export function ScanFields(arg1:string):Promise<Array<app.FieldOption>>;
 
 export function SelectFile():Promise<string>;
