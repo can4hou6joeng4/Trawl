@@ -6,7 +6,7 @@ require (
 	github.com/dslipak/pdf v0.0.2
 	github.com/pdfcpu/pdfcpu v0.13.0
 	github.com/spf13/viper v1.21.0
-	github.com/wailsapp/wails/v2 v2.12.0
+	github.com/wailsapp/wails/v2 v2.13.0
 	github.com/xuri/excelize/v2 v2.11.0
 )
 
