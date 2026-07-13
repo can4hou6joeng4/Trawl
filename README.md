@@ -33,7 +33,7 @@
 
 ## ✨ Features
 
-- 🗂️ **v4.0 Evidence Desk UI** - Source pages and structured records side by side, with one-click locate from record to page.
+- 🗂️ **v4.1 Evidence Desk UI** - Real source pages rendered beside structured records; extracted fields are highlighted in place on the page with two-way locate between page and record.
 - 📄 **Smart Parsing** - Auto-detect `.docx`, `.pdf`, and image (`.jpg` / `.png`) legal documents.
 - ✏️ **Review-then-Export** - Edit extracted values directly on record cards; manual corrections flow into the export.
 - 🎯 **Precise Extraction** - Extract key fields (defendant, ID, requests, facts) with per-field visibility toggles.
