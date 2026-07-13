@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
-import { loadPdf, type LoadedPdf } from "../utils/pdfDoc";
+import { loadPdf, type LoadedPdf, type PositionedText } from "../utils/pdfDoc";
 import { computeFieldHighlights, type FieldHighlight } from "../utils/pdfHighlights";
+import type { OcrLine } from "../services";
 
 export interface HighlightTarget {
   recIndex: number;
@@ -23,11 +24,14 @@ const props = withDefaults(
     recordsOnPage: { index: number; label: string }[];
     /** 当前页记录的可见字段值，用于文本层高亮匹配 */
     highlightTargets?: HighlightTarget[];
+    /** 当前页的云端 OCR 坐标行（归一化 [0,1]），扫描件/图片高亮数据源 */
+    ocrLines?: OcrLine[];
     /** 需要在页面高亮上闪烁的记录下标（「定位原文」回链） */
     flashRecIndex?: number | null;
   }>(),
   {
     highlightTargets: () => [],
+    ocrLines: () => [],
     flashRecIndex: null,
   },
 );
@@ -47,6 +51,7 @@ const mockLines = [
 ];
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
+const imgEl = ref<HTMLImageElement | null>(null);
 const pageCardEl = ref<HTMLElement | null>(null);
 const rendering = ref(false);
 const renderFailed = ref(false);
@@ -92,8 +97,13 @@ async function renderCurrent() {
 }
 
 // 在文本层中匹配当前页记录的字段值，生成高亮矩形。
-// 扫描件无文本层 → 匹配不到 → 无高亮（此时保留 REC 角标作为定位入口）。
+// 数据源优先级：pdf.js 文本层（字符级坐标，最精确）→ 云端 OCR 坐标行
+// （扫描件/图片，行级坐标）→ 都没有则无高亮（保留 REC 角标作为定位入口）。
 async function refreshHighlights() {
+  if (props.kind === "image") {
+    refreshImageHighlights();
+    return;
+  }
   if (!pdf || props.kind !== "pdf") {
     highlights.value = [];
     return;
@@ -104,8 +114,15 @@ async function refreshHighlights() {
     // 与画布共用同一宽度基准（renderPage 设置的 CSS 宽），
     // 容器出现滚动条/窗口调整后重测容器会导致坐标与画布错位
     const cssWidth = canvasEl.value?.clientWidth || pageCardEl.value?.clientWidth || 340;
-    const items = await pdf.getTextLayout(page, cssWidth);
+    let items = await pdf.getTextLayout(page, cssWidth);
     if (gen !== generation || page !== props.currentPage) return; // 已换文档或已翻页
+    if (items.length === 0 && props.ocrLines.length > 0) {
+      // 渲染在途时画布尺寸仍属旧页，等渲染完成后的那次刷新（renderCurrent
+      // 在置 rendering=false 之前发起刷新，本守卫不拦截该路径）
+      if (rendering.value) return;
+      // 扫描件：无文本层，用云端 OCR 坐标行（归一化 × 画布显示尺寸）
+      items = ocrToPositioned(props.ocrLines, cssWidth, canvasEl.value?.clientHeight || 0);
+    }
     highlights.value = computeFieldHighlights(items, props.highlightTargets);
   } catch (e) {
     if (gen !== generation) return; // 换文档/卸载使在途请求 reject 属预期，静默
@@ -114,11 +131,38 @@ async function refreshHighlights() {
   }
 }
 
-// 字段显隐或记录值编辑后重新匹配（人工修正后原文不再匹配属预期：高亮消失）
+// 图片文书：OCR 坐标行 × 图片显示尺寸，同步计算无异步竞态
+function refreshImageHighlights() {
+  const el = imgEl.value;
+  if (!el || !el.clientWidth || !el.clientHeight || props.ocrLines.length === 0) {
+    highlights.value = [];
+    return;
+  }
+  const items = ocrToPositioned(props.ocrLines, el.clientWidth, el.clientHeight);
+  highlights.value = computeFieldHighlights(items, props.highlightTargets);
+}
+
+/** 归一化 OCR 行 → 显示坐标系的文本项（与 pdf.js 文本层同构，复用同一匹配器） */
+function ocrToPositioned(lines: OcrLine[], displayW: number, displayH: number): PositionedText[] {
+  if (displayW <= 0 || displayH <= 0) return [];
+  return lines.map((l) => ({
+    str: l.text,
+    left: l.x * displayW,
+    top: l.y * displayH,
+    width: l.w * displayW,
+    height: l.h * displayH,
+  }));
+}
+
+// 字段显隐、记录值编辑或 OCR 行到位后重新匹配
+// （人工修正后原文不再匹配属预期：高亮消失）
 watch(
-  () => JSON.stringify(props.highlightTargets),
+  () => JSON.stringify([props.highlightTargets, props.ocrLines]),
   () => {
-    if (pdf) void refreshHighlights();
+    // 渲染在途时跳过：renderCurrent 完成后的刷新在 await 后读取 props，
+    // 必然携带最新 targets/ocrLines，这里的重复往返注定被丢弃
+    if (rendering.value) return;
+    if (pdf || props.kind === "image") void refreshHighlights();
   },
 );
 
@@ -187,9 +231,21 @@ function go(delta: number) {
     </div>
 
     <div ref="pageCardEl" class="pagecard" :class="{ real: showCanvas || (kind === 'image' && imageSrc) }">
-      <!-- PDF 真实渲染 + 字段高亮覆盖层 -->
-      <div v-show="showCanvas" class="canvas-wrap">
-        <canvas ref="canvasEl" class="pdf-canvas"></canvas>
+      <!-- 真实原文（PDF 画布 / 图片）+ 字段高亮覆盖层 -->
+      <div
+        v-show="showCanvas || (kind === 'image' && imageSrc)"
+        class="canvas-wrap"
+        :class="{ 'image-wrap': kind === 'image' }"
+      >
+        <canvas v-show="showCanvas" ref="canvasEl" class="pdf-canvas"></canvas>
+        <img
+          v-if="kind === 'image' && imageSrc"
+          ref="imgEl"
+          class="doc-image"
+          :src="imageSrc"
+          :alt="fileName"
+          @load="refreshHighlights"
+        />
         <template v-for="(h, hi) in highlights" :key="hi">
           <button
             v-for="(r, ri) in h.rects"
@@ -208,9 +264,6 @@ function go(delta: number) {
       <div v-if="showCanvas && rendering" class="page-loading">
         <span class="spinner"></span>
       </div>
-
-      <!-- 图片文书直接显示 -->
-      <img v-if="kind === 'image' && imageSrc" class="doc-image" :src="imageSrc" :alt="fileName" />
 
       <!-- DOCX / 数据未就绪 / 渲染失败：占位页 -->
       <template v-if="!showCanvas && !(kind === 'image' && imageSrc)">
@@ -313,6 +366,10 @@ function go(delta: number) {
   position: relative;
   width: fit-content;
   margin: 0 auto;
+}
+/* 图片模式撑满页卡宽度（与原直铺行为一致），高亮坐标随图片显示尺寸换算 */
+.canvas-wrap.image-wrap {
+  width: 100%;
 }
 .pdf-canvas {
   display: block;

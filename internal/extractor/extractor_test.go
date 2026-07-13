@@ -319,14 +319,20 @@ func TestExtractData_CacheHit(t *testing.T) {
 	data := []byte("test data for cache")
 	hash := e.calculateHash(data)
 
-	e.cache.Put(hash, []Record{{"defendant": "缓存张三"}})
+	e.cache.Put(hash, ExtractOutput{
+		Records:  []Record{{"defendant": "缓存张三"}},
+		OcrPages: []OcrPageLines{{Page: 1, Lines: []OcrLine{{Text: "被告：缓存张三", X: 0.1, Y: 0.2, W: 0.5, H: 0.03}}}},
+	})
 
-	records, err := e.ExtractData(context.Background(), data, "test.pdf", []string{"defendant"}, nil)
+	out, err := e.ExtractData(context.Background(), data, "test.pdf", []string{"defendant"}, nil)
 	if err != nil {
 		t.Fatalf("缓存命中不应报错: %v", err)
 	}
-	if len(records) != 1 || records[0]["defendant"] != "缓存张三" {
+	if len(out.Records) != 1 || out.Records[0]["defendant"] != "缓存张三" {
 		t.Error("应返回缓存中的数据")
+	}
+	if len(out.OcrPages) != 1 || len(out.OcrPages[0].Lines) != 1 {
+		t.Error("坐标行应随缓存一起回放")
 	}
 }
 

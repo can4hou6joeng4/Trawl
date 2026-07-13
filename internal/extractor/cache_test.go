@@ -7,21 +7,21 @@ import (
 
 func TestLRUCache_PutGet(t *testing.T) {
 	c := NewRecordCache(2)
-	c.Put("a", []Record{{"defendant": "X"}})
+	c.Put("a", ExtractOutput{Records: []Record{{"defendant": "X"}}})
 	got, ok := c.Get("a")
 	if !ok {
 		t.Fatal("expected hit for key a")
 	}
-	if got[0]["defendant"] != "X" {
+	if got.Records[0]["defendant"] != "X" {
 		t.Fatalf("got %v", got)
 	}
 }
 
 func TestLRUCache_EvictsOldest(t *testing.T) {
 	c := NewRecordCache(2)
-	c.Put("a", []Record{{"k": "1"}})
-	c.Put("b", []Record{{"k": "2"}})
-	c.Put("c", []Record{{"k": "3"}}) // should evict "a"
+	c.Put("a", ExtractOutput{Records: []Record{{"k": "1"}}})
+	c.Put("b", ExtractOutput{Records: []Record{{"k": "2"}}})
+	c.Put("c", ExtractOutput{Records: []Record{{"k": "3"}}}) // should evict "a"
 
 	if _, ok := c.Get("a"); ok {
 		t.Fatal("a should have been evicted")
@@ -36,10 +36,10 @@ func TestLRUCache_EvictsOldest(t *testing.T) {
 
 func TestLRUCache_GetPromotes(t *testing.T) {
 	c := NewRecordCache(2)
-	c.Put("a", []Record{{"k": "1"}})
-	c.Put("b", []Record{{"k": "2"}})
-	_, _ = c.Get("a")                // touch a -> a now most-recent
-	c.Put("c", []Record{{"k": "3"}}) // should evict b, not a
+	c.Put("a", ExtractOutput{Records: []Record{{"k": "1"}}})
+	c.Put("b", ExtractOutput{Records: []Record{{"k": "2"}}})
+	_, _ = c.Get("a")                                        // touch a -> a now most-recent
+	c.Put("c", ExtractOutput{Records: []Record{{"k": "3"}}}) // should evict b, not a
 
 	if _, ok := c.Get("b"); ok {
 		t.Fatal("b should have been evicted (least recent)")
@@ -51,7 +51,7 @@ func TestLRUCache_GetPromotes(t *testing.T) {
 
 func TestLRUCache_ZeroCapacity_IsNoOp(t *testing.T) {
 	c := NewRecordCache(0)
-	c.Put("a", []Record{{"k": "1"}})
+	c.Put("a", ExtractOutput{Records: []Record{{"k": "1"}}})
 	if _, ok := c.Get("a"); ok {
 		t.Fatal("zero-capacity cache must never store")
 	}
@@ -65,7 +65,7 @@ func TestLRUCache_ConcurrentAccess(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			key := string(rune('a' + i%26))
-			c.Put(key, []Record{{"k": key}})
+			c.Put(key, ExtractOutput{Records: []Record{{"k": key}}})
 			_, _ = c.Get(key)
 		}(i)
 	}

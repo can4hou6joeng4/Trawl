@@ -13,7 +13,7 @@ import (
 )
 
 // extractPdf 处理 PDF 提取（优先本地提取文本层）
-func (e *Extractor) extractPdf(ctx context.Context, fileData []byte, fields []string, onProgress ProgressCallback) ([]Record, error) {
+func (e *Extractor) extractPdf(ctx context.Context, fileData []byte, fields []string, onProgress ProgressCallback) (ExtractOutput, error) {
 	e.logger.Info("正在解析 PDF 结构...", "bytes", len(fileData))
 
 	// 1. 获取总页数（多库回退提高鲁棒性；全部失败时按 1 页继续尝试）
@@ -48,7 +48,8 @@ func (e *Extractor) extractPdf(ctx context.Context, fileData []byte, fields []st
 
 	if len(strings.TrimSpace(firstPageText)) > 20 {
 		e.logger.Info("检测到 PDF 文本层，切换至 [本地高速解析] 模式")
-		return e.batchExtractLocalPdf(ctx, fileData, fields, totalPages, onProgress)
+		records, err := e.batchExtractLocalPdf(ctx, fileData, fields, totalPages, onProgress)
+		return ExtractOutput{Records: records}, err
 	}
 
 	e.logger.Info("未检测到 PDF 文本层或文本过少，切换至 [云端识别] 模式")
@@ -60,11 +61,12 @@ func (e *Extractor) extractPdf(ctx context.Context, fileData []byte, fields []st
 	}
 
 	if runtime.GOOS != "windows" {
-		return nil, fmt.Errorf("%w: 扫描件或无文本层 PDF 需要配置百度 OCR Token", ErrTokenMissing)
+		return ExtractOutput{}, fmt.Errorf("%w: 扫描件或无文本层 PDF 需要配置百度 OCR Token", ErrTokenMissing)
 	}
 
 	e.logger.Info("未配置百度 Token，回退至 [本地系统识别] 模式")
-	return e.extractViaWinOcr(ctx, fileData, totalPages, onProgress)
+	records, err := e.extractViaWinOcr(ctx, fileData, totalPages, onProgress)
+	return ExtractOutput{Records: records}, err
 }
 
 // pdfPageCount 依次尝试 dslipak/pdf 与 pdfcpu 获取页数，供本地与云端路径共用。

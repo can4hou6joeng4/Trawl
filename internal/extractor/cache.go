@@ -15,8 +15,8 @@ type RecordCache struct {
 }
 
 type cacheEntry struct {
-	key     string
-	records []Record
+	key    string
+	output ExtractOutput
 }
 
 // NewRecordCache returns a cache that evicts the least-recently-used entry
@@ -29,24 +29,24 @@ func NewRecordCache(capacity int) *RecordCache {
 	}
 }
 
-// Get returns the cached records for key, promoting the entry to most-recent.
-func (c *RecordCache) Get(key string) ([]Record, bool) {
+// Get returns the cached extraction output for key, promoting the entry to most-recent.
+func (c *RecordCache) Get(key string) (ExtractOutput, bool) {
 	if c.capacity <= 0 {
-		return nil, false
+		return ExtractOutput{}, false
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	el, ok := c.index[key]
 	if !ok {
-		return nil, false
+		return ExtractOutput{}, false
 	}
 	c.ll.MoveToFront(el)
-	return el.Value.(*cacheEntry).records, true
+	return el.Value.(*cacheEntry).output, true
 }
 
 // Put inserts or refreshes an entry, evicting the least-recently-used entry
 // if capacity is exceeded.
-func (c *RecordCache) Put(key string, records []Record) {
+func (c *RecordCache) Put(key string, output ExtractOutput) {
 	if c.capacity <= 0 {
 		return
 	}
@@ -54,12 +54,12 @@ func (c *RecordCache) Put(key string, records []Record) {
 	defer c.mu.Unlock()
 
 	if el, ok := c.index[key]; ok {
-		el.Value.(*cacheEntry).records = records
+		el.Value.(*cacheEntry).output = output
 		c.ll.MoveToFront(el)
 		return
 	}
 
-	el := c.ll.PushFront(&cacheEntry{key: key, records: records})
+	el := c.ll.PushFront(&cacheEntry{key: key, output: output})
 	c.index[key] = el
 
 	for c.ll.Len() > c.capacity {

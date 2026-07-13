@@ -87,12 +87,13 @@ func (a *App) SelectFile() (string, error) {
 
 // ExtractResult holds the extraction result
 type ExtractResult struct {
-	Success      bool               `json:"success"`
-	RecordCount  int                `json:"recordCount"`
-	OutputPath   string             `json:"outputPath"`
-	ErrorMessage string             `json:"errorMessage,omitempty"`
-	Records      []extractor.Record `json:"records,omitempty"`
-	FieldLabels  map[string]string  `json:"fieldLabels,omitempty"` // Map of key -> Chinese label
+	Success      bool                     `json:"success"`
+	RecordCount  int                      `json:"recordCount"`
+	OutputPath   string                   `json:"outputPath"`
+	ErrorMessage string                   `json:"errorMessage,omitempty"`
+	Records      []extractor.Record       `json:"records,omitempty"`
+	FieldLabels  map[string]string        `json:"fieldLabels,omitempty"` // Map of key -> Chinese label
+	OcrPages     []extractor.OcrPageLines `json:"ocrPages,omitempty"`    // 扫描件/图片的逐页 OCR 坐标行（字段高亮数据源）
 }
 
 // FieldOption represents a selectable extraction field
@@ -159,18 +160,18 @@ var errTrialExpired = errors.New("试用期已结束（限 7 天），功能已�
 
 // runExtraction 是 PreviewData 与 ExtractToPath 的公共骨架：
 // 试用校验 → 读取本地文件 → 在可取消的 ctx 中执行提取。
-func (a *App) runExtraction(inputPath string, fields []string) ([]extractor.Record, error) {
+func (a *App) runExtraction(inputPath string, fields []string) (extractor.ExtractOutput, error) {
 	if config.GetTrialStatus().IsExpired {
-		return nil, errTrialExpired
+		return extractor.ExtractOutput{}, errTrialExpired
 	}
 
 	// 适配器层：负责读取本地文件
 	fileData, err := os.ReadFile(inputPath)
 	if err != nil {
-		return nil, fmt.Errorf("读取文件失败: %w", err)
+		return extractor.ExtractOutput{}, fmt.Errorf("读取文件失败: %w", err)
 	}
 	if len(fileData) == 0 {
-		return nil, fmt.Errorf("%w，请检查文件是否损坏", extractor.ErrEmptyFile)
+		return extractor.ExtractOutput{}, fmt.Errorf("%w，请检查文件是否损坏", extractor.ErrEmptyFile)
 	}
 
 	a.docMu.Lock()
@@ -221,7 +222,7 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 		}
 	}
 
-	records, err := a.runExtraction(inputPath, fields)
+	out, err := a.runExtraction(inputPath, fields)
 	if err != nil {
 		return ExtractResult{
 			Success:      false,
@@ -229,7 +230,7 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 		}
 	}
 
-	if len(records) == 0 {
+	if len(out.Records) == 0 {
 		return ExtractResult{
 			Success:      false,
 			ErrorMessage: extractor.ErrNoRecords.Error(),
@@ -237,7 +238,7 @@ func (a *App) ExtractToPath(inputPath, outputPath string, fields []string) Extra
 	}
 
 	// Save based on extension
-	return a.ExportData(records, outputPath)
+	return a.ExportData(out.Records, outputPath)
 }
 
 // ExportData 接收用户编辑后的数据并直接保存到指定路径
@@ -283,7 +284,7 @@ func (a *App) PreviewData(inputPath string, fields []string) ExtractResult {
 		}
 	}
 
-	records, err := a.runExtraction(inputPath, fields)
+	out, err := a.runExtraction(inputPath, fields)
 	if err != nil {
 		return ExtractResult{
 			Success:      false,
@@ -291,7 +292,7 @@ func (a *App) PreviewData(inputPath string, fields []string) ExtractResult {
 		}
 	}
 
-	if len(records) == 0 {
+	if len(out.Records) == 0 {
 		return ExtractResult{
 			Success:      false,
 			ErrorMessage: extractor.ErrNoRecords.Error(),
@@ -306,9 +307,10 @@ func (a *App) PreviewData(inputPath string, fields []string) ExtractResult {
 
 	return ExtractResult{
 		Success:     true,
-		RecordCount: len(records),
-		Records:     records,
+		RecordCount: len(out.Records),
+		Records:     out.Records,
 		FieldLabels: labels,
+		OcrPages:    out.OcrPages,
 	}
 }
 

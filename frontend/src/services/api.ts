@@ -2,6 +2,21 @@ export interface Record {
   [key: string]: string;
 }
 
+/** 云端 OCR 识别的一行文字，坐标归一化到 [0,1]（相对页面尺寸） */
+export interface OcrLine {
+  text: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** 一页的 OCR 文字行；page 为全文档 1-based 页码 */
+export interface OcrPageLines {
+  page: number;
+  lines: OcrLine[];
+}
+
 export interface ExtractResult {
   success: boolean;
   recordCount: number;
@@ -9,6 +24,8 @@ export interface ExtractResult {
   errorMessage?: string;
   records?: Record[];
   fieldLabels?: { [key: string]: string };
+  /** 扫描件/图片的逐页 OCR 坐标行（字段高亮数据源），文本层 PDF/DOCX 为空 */
+  ocrPages?: OcrPageLines[];
 }
 
 export interface FieldOption {

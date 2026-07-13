@@ -306,3 +306,94 @@ describe('DocPane 字段高亮', () => {
     expect(wrapper.find('.field-hl .tag').classes()).toContain('below')
   })
 })
+
+describe('DocPane OCR 坐标高亮（扫描件/图片）', () => {
+  const targets = [
+    { recIndex: 0, fields: [{ key: 'defendant', label: '被告', value: '张三' }] },
+  ]
+  const ocrLines = [{ text: '被告：张三，男', x: 0.1, y: 0.2, w: 0.5, h: 0.05 }]
+
+  function stubSize(el: Element, width: number, height: number) {
+    Object.defineProperty(el, 'clientWidth', { value: width, configurable: true })
+    Object.defineProperty(el, 'clientHeight', { value: height, configurable: true })
+  }
+
+  it('扫描件（无文本层 PDF）用 OCR 行渲染高亮，几何按画布尺寸换算', async () => {
+    pdfMocks.getTextLayout.mockResolvedValue([]) // 扫描件：文本层为空
+    // jsdom 无布局：在画布原型上桩定显示尺寸，让首次刷新即可换算
+    Object.defineProperty(HTMLCanvasElement.prototype, 'clientWidth', { value: 340, configurable: true })
+    Object.defineProperty(HTMLCanvasElement.prototype, 'clientHeight', { value: 480, configurable: true })
+    try {
+      const wrapper = mount(DocPane, {
+        props: { ...baseProps, kind: 'pdf', docData: 'AAAA', highlightTargets: targets, ocrLines },
+      })
+      await flush()
+      await flush()
+
+      const hl = wrapper.find('.field-hl')
+      expect(hl.exists()).toBe(true)
+      // 行框 340×480：x=34 y=96 w=170 h=24 → 匹配"张三"占行内偏移，按钮外扩 2px
+      const left = parseFloat((hl.element as HTMLElement).style.left)
+      const top = parseFloat((hl.element as HTMLElement).style.top)
+      expect(top).toBeCloseTo(94, 0) // 96 - 2
+      expect(left).toBeGreaterThan(34) // "被告："之后，行内加权均摊
+      expect(wrapper.find('.field-hl .tag').text()).toBe('被告')
+    } finally {
+      delete (HTMLCanvasElement.prototype as { clientWidth?: unknown }).clientWidth
+      delete (HTMLCanvasElement.prototype as { clientHeight?: unknown }).clientHeight
+    }
+  })
+
+  it('图片文书 load 后用 OCR 行渲染高亮', async () => {
+    const wrapper = mount(DocPane, {
+      props: { ...baseProps, kind: 'image', docData: 'IMGDATA', fileName: '借条.png', highlightTargets: targets, ocrLines },
+    })
+    const img = wrapper.find('img.doc-image')
+    expect(img.exists()).toBe(true)
+
+    stubSize(img.element, 400, 200)
+    await img.trigger('load')
+    await flush()
+
+    const hl = wrapper.find('.field-hl')
+    expect(hl.exists()).toBe(true)
+    const top = parseFloat((hl.element as HTMLElement).style.top)
+    expect(top).toBeCloseTo(38, 0) // 0.2×200 - 2
+  })
+
+  it('文本层优先：有文本层时忽略 OCR 行', async () => {
+    pdfMocks.getTextLayout.mockResolvedValue([
+      { str: '被告：张三，男', left: 50, top: 100, width: 70, height: 14 },
+    ])
+    const wrapper = mount(DocPane, {
+      props: {
+        ...baseProps,
+        kind: 'pdf',
+        docData: 'AAAA',
+        highlightTargets: targets,
+        // OCR 行给出截然不同的位置（页面底部），若被采用则 top≈478
+        ocrLines: [{ text: '被告：张三，男', x: 0.1, y: 0.95, w: 0.5, h: 0.04 }],
+      },
+    })
+    await flush()
+    await flush()
+
+    const hls = wrapper.findAll('.field-hl')
+    expect(hls).toHaveLength(1)
+    const top = parseFloat((hls[0].element as HTMLElement).style.top)
+    expect(top).toBeCloseTo(98, 0) // 文本层 top=100 - 2，而非 OCR 的底部位置
+  })
+
+  it('图片无 OCR 行时不渲染高亮，REC 角标保留', async () => {
+    const wrapper = mount(DocPane, {
+      props: { ...baseProps, kind: 'image', docData: 'IMGDATA', fileName: '借条.png', highlightTargets: targets },
+    })
+    const img = wrapper.find('img.doc-image')
+    stubSize(img.element, 400, 200)
+    await img.trigger('load')
+    await flush()
+
+    expect(wrapper.find('.field-hl').exists()).toBe(false)
+    expect(wrapper.find('.page-rec').exists()).toBe(true)
+  })
+})

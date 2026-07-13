@@ -54,12 +54,12 @@ type ProgressCallback func(current, total int, message string)
 // ctx is honored at every IO boundary: HTTP requests to Baidu, sleeps between
 // retry chunks, and worker-pool result drains. A pre-cancelled ctx returns
 // ErrCancelled before any work is done.
-func (e *Extractor) ExtractData(ctx context.Context, fileData []byte, fileName string, fields []string, onProgress ProgressCallback) ([]Record, error) {
+func (e *Extractor) ExtractData(ctx context.Context, fileData []byte, fileName string, fields []string, onProgress ProgressCallback) (ExtractOutput, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, ErrCancelled
+		return ExtractOutput{}, ErrCancelled
 	}
 	if len(fileData) == 0 {
-		return nil, ErrEmptyFile
+		return ExtractOutput{}, ErrEmptyFile
 	}
 	e.logger.Info("开始提取数据", "file", fileName, "size", len(fileData), "fields", fields)
 	ext := strings.ToLower(filepath.Ext(fileName))
@@ -71,35 +71,37 @@ func (e *Extractor) ExtractData(ctx context.Context, fileData []byte, fileName s
 		return cached, nil
 	}
 
-	var records []Record
+	var out ExtractOutput
 	var err error
 
 	switch ext {
 	case ".pdf":
-		records, err = e.extractPdf(ctx, fileData, fields, onProgress)
+		out, err = e.extractPdf(ctx, fileData, fields, onProgress)
 	case ".jpg", ".jpeg", ".png":
 		if !e.baiduClient.HasToken() {
-			return nil, fmt.Errorf("%w: 图片识别需要配置百度 OCR Token", ErrTokenMissing)
+			return ExtractOutput{}, fmt.Errorf("%w: 图片识别需要配置百度 OCR Token", ErrTokenMissing)
 		}
 		e.logger.Info("使用 [百度云端引擎] 识别图片", "file", fileName)
-		records, err = e.baiduClient.ParseDocument(ctx, fileData, 1, false, onProgress)
+		out, err = e.baiduClient.ParseDocument(ctx, fileData, 1, false, onProgress)
 	case ".docx":
 		e.logger.Info("使用本地原生逻辑提取 DOCX", "file", fileName)
+		var records []Record
 		records, err = e.extractFromDocx(ctx, fileData, fields)
+		out = ExtractOutput{Records: records}
 	default:
-		return nil, fmt.Errorf("%w: %s", ErrUnsupportedFormat, ext)
+		return ExtractOutput{}, fmt.Errorf("%w: %s", ErrUnsupportedFormat, ext)
 	}
 
 	if err != nil {
-		return nil, err
+		return ExtractOutput{}, err
 	}
 
-	// 2. 写入缓存 (仅当结果非空时)
-	if len(records) > 0 {
-		e.cache.Put(fileHash, records)
+	// 2. 写入缓存 (仅当结果非空时；坐标行随记录同缓存，命中即回放)
+	if len(out.Records) > 0 {
+		e.cache.Put(fileHash, out)
 	}
 
-	return records, nil
+	return out, nil
 }
 
 // calculateHash 计算文件内容的 SHA256 哈希值

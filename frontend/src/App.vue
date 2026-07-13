@@ -40,6 +40,7 @@
           :recordPages="recordPages"
           :recordsOnPage="recordsOnPage"
           :highlightTargets="highlightTargets"
+          :ocrLines="ocrLinesOnPage"
           :flashRecIndex="pageFlashRec"
           @update:currentPage="curPage = $event"
           @locate="locateFromPage"
@@ -107,7 +108,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
-import { api, friendlyErrorMessage, isCancelledError, type Record, type TrialStatus } from "./services";
+import { api, friendlyErrorMessage, isCancelledError, type OcrPageLines, type Record, type TrialStatus } from "./services";
 import { useNotification } from "./composables/useNotification";
 import { useExtractionProgress } from "./composables/useExtractionProgress";
 import { FIELD_ORDER, fieldKind, type ExportFormat, type RecordField } from "./utils/fields";
@@ -250,6 +251,10 @@ const highlightTargets = computed(() =>
     })),
 );
 
+// 扫描件/图片的 OCR 坐标行（后端归一化），按当前页下发给 DocPane
+const ocrPages = ref<OcrPageLines[]>([]);
+const ocrLinesOnPage = computed(() => ocrPages.value.find((p) => p.page === curPage.value)?.lines ?? []);
+
 // ── 主流程：选择 → 解析（自动预览）→ 取证台 ──
 async function handleFile(path: string) {
   selectedFile.value = path;
@@ -260,6 +265,7 @@ async function handleFile(path: string) {
   docLoadToken += 1;
   docData.value = null;
   docNumPages.value = null;
+  ocrPages.value = [];
   stage.value = "parsing";
   isLoading.value = true;
   resetProgress();
@@ -270,6 +276,7 @@ async function handleFile(path: string) {
       records.value = res.records;
       fieldLabels.value = res.fieldLabels || {};
       selectedFields.value = FIELD_ORDER.filter((k) => k in (res.fieldLabels || {}));
+      ocrPages.value = res.ocrPages || [];
       openSet.value = new Set([0]);
       curPage.value = Number(res.records[0].page) || 1;
       stage.value = "desk";
@@ -317,6 +324,7 @@ function resetToLanding() {
   docLoadToken += 1;
   docData.value = null;
   docNumPages.value = null;
+  ocrPages.value = [];
 }
 
 // ── 记录交互 ──

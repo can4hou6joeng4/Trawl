@@ -24,7 +24,9 @@ type BaiduClient struct {
 	logger     *slog.Logger
 }
 
-// BaiduOCRResponse 百度 Layout Parsing 响应结构
+// BaiduOCRResponse 百度 Layout Parsing 响应结构（PaddleX 服务化契约）。
+// prunedResult/dataInfo 为可选增强：用 RawMessage 接住后逐页 best-effort
+// 解析——字段缺失或形状随部署版本变化时坐标行退化，markdown 主流程不受影响。
 type BaiduOCRResponse struct {
 	ErrorCode int    `json:"error_code"`
 	ErrorMsg  string `json:"error_msg"`
@@ -33,8 +35,37 @@ type BaiduOCRResponse struct {
 			Markdown struct {
 				Text string `json:"text"`
 			} `json:"markdown"`
+			PrunedResult json.RawMessage `json:"prunedResult"`
 		} `json:"layoutParsingResults"`
+		DataInfo json.RawMessage `json:"dataInfo"`
 	} `json:"result"`
+}
+
+// baiduPrunedResult prunedResult 中与坐标相关的部分
+type baiduPrunedResult struct {
+	OverallOcrRes struct {
+		RecTexts []string      `json:"rec_texts"`
+		RecBoxes [][]float64   `json:"rec_boxes"`
+		RecPolys [][][]float64 `json:"rec_polys"`
+	} `json:"overall_ocr_res"`
+}
+
+// baiduDataInfo 输入数据信息：图片为顶层宽高，PDF 为逐页栅格尺寸
+// （与 rec_boxes 同一像素空间）
+type baiduDataInfo struct {
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+	Pages  []struct {
+		Width  float64 `json:"width"`
+		Height float64 `json:"height"`
+	} `json:"pages"`
+}
+
+// ocrPage callBaiduAPI 的单页产物：markdown 用于字段提取，
+// lines 为归一化坐标文字行（可能为 nil，见 buildOcrLines）。
+type ocrPage struct {
+	markdown string
+	lines    []OcrLine
 }
 
 // NewBaiduClient 创建百度 OCR 客户端
@@ -75,22 +106,23 @@ func isRetryableStatus(err error) bool {
 //
 // totalPages 由调用方传入（extractPdf 已完成多库回退的页数探测，图片固定为 1），
 // 避免此处重复解析；超过分块阈值的 PDF 会被物理切片后逐块识别。
-func (c *BaiduClient) ParseDocument(ctx context.Context, fileData []byte, totalPages int, isPdf bool, onProgress ProgressCallback) ([]Record, error) {
+// 返回结构化记录与逐页归一化坐标文字行（供前端字段高亮）。
+func (c *BaiduClient) ParseDocument(ctx context.Context, fileData []byte, totalPages int, isPdf bool, onProgress ProgressCallback) (ExtractOutput, error) {
 	c.logger.Info("开始调用百度 OCR 接口", "isPdf", isPdf, "totalPages", totalPages, "dataSize", len(fileData))
 	if len(fileData) == 0 {
-		return nil, ErrEmptyFile
+		return ExtractOutput{}, ErrEmptyFile
 	}
 	if !c.HasToken() {
-		return nil, fmt.Errorf("%w: 请检查 config/conf.yaml", ErrTokenMissing)
+		return ExtractOutput{}, fmt.Errorf("%w: 请检查 config/conf.yaml", ErrTokenMissing)
 	}
 	if totalPages < 1 {
 		totalPages = 1
 	}
 
-	// 1. 获取所有页面的 Markdown（超过阈值的 PDF 物理分块，防止云端超时）
+	// 1. 获取所有页面的 Markdown 与坐标行（超过阈值的 PDF 物理分块，防止云端超时）
 	const maxPagesPerChunk = 20 // 小分块粒度显著提升云端解析稳定性
 
-	var allPagesMarkdown []string
+	var allPages []ocrPage
 	switch {
 	case isPdf && totalPages > maxPagesPerChunk:
 		c.logger.Info("启用大文件物理分块处理模式", "chunkSize", maxPagesPerChunk)
@@ -98,15 +130,15 @@ func (c *BaiduClient) ParseDocument(ctx context.Context, fileData []byte, totalP
 			end := min(start+maxPagesPerChunk-1, totalPages)
 			pages, err := c.parseChunkWithRetry(ctx, fileData, start, end, totalPages, onProgress)
 			if err != nil {
-				return nil, err
+				return ExtractOutput{}, err
 			}
-			allPagesMarkdown = append(allPagesMarkdown, pages...)
+			allPages = append(allPages, sanitizeChunkPages(pages, end-start+1, c.logger)...)
 
 			// 强制冷却，防止连续高压导致百度后端崩溃
 			if end < totalPages {
 				c.logger.Info("分块处理完成，进入 10 秒冷却期以释放云端算力...")
 				if err := sleepCtx(ctx, 10*time.Second); err != nil {
-					return nil, ErrCancelled
+					return ExtractOutput{}, ErrCancelled
 				}
 			}
 		}
@@ -116,47 +148,51 @@ func (c *BaiduClient) ParseDocument(ctx context.Context, fileData []byte, totalP
 		}
 		pages, err := c.callBaiduAPI(ctx, fileData, true, onProgress)
 		if err != nil {
-			return nil, err
+			return ExtractOutput{}, err
 		}
-		allPagesMarkdown = pages
+		allPages = pages
 	default: // 图片
 		if onProgress != nil {
 			onProgress(1, 1, "正在对图片进行语义化识别...")
 		}
 		pages, err := c.callBaiduAPI(ctx, fileData, false, onProgress)
 		if err != nil {
-			return nil, err
+			return ExtractOutput{}, err
 		}
-		allPagesMarkdown = pages
+		allPages = pages
 	}
 
-	// 2. 按页解析汇总后的 Markdown
-	c.logger.Info("所有页面识别完成，开始按页提取法律实体", "totalFetchedPages", len(allPagesMarkdown))
+	// 2. 按页解析汇总后的 Markdown，坐标行按全局页序号归档
+	c.logger.Info("所有页面识别完成，开始按页提取法律实体", "totalFetchedPages", len(allPages))
 	var allRecords []Record
-	fetched := len(allPagesMarkdown)
-	for i, pageMd := range allPagesMarkdown {
+	var ocrPages []OcrPageLines
+	fetched := len(allPages)
+	for i, pg := range allPages {
 		if err := ctx.Err(); err != nil {
-			return nil, ErrCancelled
+			return ExtractOutput{}, ErrCancelled
 		}
 		if onProgress != nil {
 			onProgress(i+1, fetched, fmt.Sprintf("正在结构化提取第 %d/%d 页的法律信息...", i+1, fetched))
 		}
-		for _, rec := range ParseMarkdown(pageMd) {
+		for _, rec := range ParseMarkdown(pg.markdown) {
 			// 标注准确的页码
 			if rec["page"] == "" {
 				rec["page"] = fmt.Sprintf("%d", i+1)
 			}
 			allRecords = append(allRecords, rec)
 		}
+		if len(pg.lines) > 0 {
+			ocrPages = append(ocrPages, OcrPageLines{Page: i + 1, Lines: pg.lines})
+		}
 	}
 
-	c.logger.Info("数据提取完成", "recordCount", len(allRecords))
-	return allRecords, nil
+	c.logger.Info("数据提取完成", "recordCount", len(allRecords), "ocrPageCount", len(ocrPages))
+	return ExtractOutput{Records: allRecords, OcrPages: ocrPages}, nil
 }
 
 // parseChunkWithRetry 物理切出 [start, end] 页并调用云端识别，
 // 云端 5xx 时执行“避让重试”（最多 2 次，间隔 20 秒）。
-func (c *BaiduClient) parseChunkWithRetry(ctx context.Context, fileData []byte, start, end, totalPages int, onProgress ProgressCallback) ([]string, error) {
+func (c *BaiduClient) parseChunkWithRetry(ctx context.Context, fileData []byte, start, end, totalPages int, onProgress ProgressCallback) ([]ocrPage, error) {
 	c.logger.Info(fmt.Sprintf("正在处理分块: 第 %d-%d 页", start, end))
 	if onProgress != nil {
 		onProgress(start, totalPages, "正在分析文档结构并准备解析...")
@@ -191,8 +227,8 @@ func (c *BaiduClient) parseChunkWithRetry(ctx context.Context, fileData []byte, 
 	}
 }
 
-// callBaiduAPI 封装底层的 API 调用逻辑
-func (c *BaiduClient) callBaiduAPI(ctx context.Context, fileData []byte, isPdf bool, onProgress ProgressCallback) ([]string, error) {
+// callBaiduAPI 封装底层的 API 调用逻辑，返回逐页 markdown 与归一化坐标行
+func (c *BaiduClient) callBaiduAPI(ctx context.Context, fileData []byte, isPdf bool, onProgress ProgressCallback) ([]ocrPage, error) {
 	c.logger.Info("正在向百度 AI Studio 发送 POST 请求...")
 	fileBase64 := base64.StdEncoding.EncodeToString(fileData)
 	fileType := 1
@@ -206,6 +242,7 @@ func (c *BaiduClient) callBaiduAPI(ctx context.Context, fileData []byte, isPdf b
 		"useDocOrientationClassify": false,
 		"useDocUnwarping":           false,
 		"useChartRecognition":       false,
+		"visualize":                 false, // 不回传可视化图片，显著减小响应体积
 	}
 
 	jsonBody, err := json.Marshal(payload)
@@ -272,14 +309,68 @@ func (c *BaiduClient) callBaiduAPI(ctx context.Context, fileData []byte, isPdf b
 		return nil, fmt.Errorf("百度 API 错误 (%d): %s", ocrResp.ErrorCode, ocrResp.ErrorMsg)
 	}
 
-	var pages []string
-	if len(ocrResp.Result.LayoutParsingResults) == 0 {
+	results := ocrResp.Result.LayoutParsingResults
+	if len(results) == 0 {
 		c.logger.Warn("百度 API 返回结果为空")
 	}
-	for _, result := range ocrResp.Result.LayoutParsingResults {
-		pages = append(pages, result.Markdown.Text)
+	// dataInfo/prunedResult 为增强字段：形状异常只降级坐标行，不影响 markdown
+	var dataInfo baiduDataInfo
+	if len(ocrResp.Result.DataInfo) > 0 {
+		if err := json.Unmarshal(ocrResp.Result.DataInfo, &dataInfo); err != nil {
+			c.logger.Warn("dataInfo 形状异常，页尺寸不可用", "error", err)
+			dataInfo = baiduDataInfo{}
+		}
+	}
+	pages := make([]ocrPage, 0, len(results))
+	for i, result := range results {
+		var pruned baiduPrunedResult
+		if len(result.PrunedResult) > 0 {
+			if err := json.Unmarshal(result.PrunedResult, &pruned); err != nil {
+				c.logger.Warn("prunedResult 形状异常，该页坐标行退化", "pageIndex", i, "error", err)
+				pruned = baiduPrunedResult{}
+			}
+		}
+		// 解析该页栅格尺寸：PDF 取 dataInfo.pages[i]；图片取 dataInfo 顶层，
+		// 缺失时本地读图片头兜底。尺寸不可得则该页不产出坐标行（前端回退角标）。
+		var pageW, pageH float64
+		if isPdf {
+			if i < len(dataInfo.Pages) {
+				pageW, pageH = dataInfo.Pages[i].Width, dataInfo.Pages[i].Height
+			}
+		} else {
+			pageW, pageH = dataInfo.Width, dataInfo.Height
+			if pageW <= 0 || pageH <= 0 {
+				// 仅 PNG 可安全兜底：JPEG 可能带 EXIF 旋转（本地读到的是
+				// 旋转前尺寸，与云端坐标空间可能不一致），宁缺毋错不兜底
+				if isPng(fileData) {
+					if w, h, ok := imageDims(fileData); ok {
+						pageW, pageH = w, h
+					}
+				}
+			}
+		}
+		ocr := pruned.OverallOcrRes
+		lines := buildOcrLines(ocr.RecTexts, ocr.RecBoxes, ocr.RecPolys, pageW, pageH)
+		if len(ocr.RecTexts) > 0 && lines == nil {
+			c.logger.Warn("该页坐标行不可用，字段高亮将回退角标", "pageIndex", i, "texts", len(ocr.RecTexts), "boxes", len(ocr.RecBoxes), "pageW", pageW, "pageH", pageH)
+		}
+		pages = append(pages, ocrPage{markdown: result.Markdown.Text, lines: lines})
 	}
 	return pages, nil
+}
+
+// sanitizeChunkPages 校验分块返回页数：与切片页数不符说明云端缺页，
+// 全局页序号会整体漂移——抹掉该块坐标行防止高亮画到物理错页
+// （markdown 记录保留，与既有行为一致：页码标注风险本就存在）。
+func sanitizeChunkPages(pages []ocrPage, expect int, logger *slog.Logger) []ocrPage {
+	if len(pages) == expect {
+		return pages
+	}
+	logger.Warn("分块返回页数与切片页数不符，该块坐标行退化以防错位", "expect", expect, "got", len(pages))
+	for j := range pages {
+		pages[j].lines = nil
+	}
+	return pages
 }
 
 // sleepCtx is time.Sleep that returns early if ctx is cancelled.
