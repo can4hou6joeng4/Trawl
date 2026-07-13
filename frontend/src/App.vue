@@ -39,6 +39,8 @@
           :totalPages="totalPages"
           :recordPages="recordPages"
           :recordsOnPage="recordsOnPage"
+          :highlightTargets="highlightTargets"
+          :flashRecIndex="pageFlashRec"
           @update:currentPage="curPage = $event"
           @locate="locateFromPage"
           @close="resetToLanding"
@@ -104,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { api, friendlyErrorMessage, isCancelledError, type Record, type TrialStatus } from "./services";
 import { useNotification } from "./composables/useNotification";
 import { useExtractionProgress } from "./composables/useExtractionProgress";
@@ -233,6 +235,21 @@ const recordsOnPage = computed(() =>
     .map((r) => ({ index: r.index, label: "REC " + String(r.index + 1).padStart(2, "0") })),
 );
 
+// 当前页记录的可见字段值 → DocPane 文本层高亮匹配
+const highlightTargets = computed(() =>
+  records.value
+    .map((r, index) => ({ index, page: Number(r.page) }))
+    .filter((r) => r.page === curPage.value)
+    .map((r) => ({
+      recIndex: r.index,
+      fields: visibleFields.value.map((f) => ({
+        key: f.key,
+        label: f.label,
+        value: records.value[r.index][f.key] || "",
+      })),
+    })),
+);
+
 // ── 主流程：选择 → 解析（自动预览）→ 取证台 ──
 async function handleFile(path: string) {
   selectedFile.value = path;
@@ -318,21 +335,36 @@ function editRecord(i: number, key: string, value: string) {
 }
 
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
+let pageFlashTimer: ReturnType<typeof setTimeout> | null = null;
+const pageFlashRec = ref<number | null>(null);
 
 function locateRecord(i: number) {
   const page = Number(records.value[i].page);
   if (page >= 1) curPage.value = page;
+  // 反向回链：在原文页面上闪烁该记录的字段高亮。
+  // 先置空再在 nextTick 置值：重复点击同一记录时强制摘挂 class，动画才会重播
+  pageFlashRec.value = null;
+  if (pageFlashTimer) clearTimeout(pageFlashTimer);
+  void nextTick(() => {
+    pageFlashRec.value = i;
+    pageFlashTimer = setTimeout(() => {
+      pageFlashRec.value = null;
+    }, 1400);
+  });
 }
 
 function locateFromPage(i: number) {
   const next = new Set(openSet.value);
   next.add(i);
   openSet.value = next;
-  flashRec.value = i;
+  flashRec.value = null;
   if (flashTimer) clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => {
-    flashRec.value = null;
-  }, 1200);
+  void nextTick(() => {
+    flashRec.value = i;
+    flashTimer = setTimeout(() => {
+      flashRec.value = null;
+    }, 1200);
+  });
 }
 
 // ── 导出 ──
@@ -435,6 +467,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener("keydown", onKeydown);
   if (flashTimer) clearTimeout(flashTimer);
+  if (pageFlashTimer) clearTimeout(pageFlashTimer);
 });
 </script>
 

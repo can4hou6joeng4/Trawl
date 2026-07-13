@@ -45,6 +45,7 @@ function makePage(num: number) {
 
 vi.mock('pdfjs-dist', () => ({
   GlobalWorkerOptions: {} as { workerSrc?: string },
+  Util: { transform: (_a: number[], b: number[]) => b },
   getDocument: () => ({
     promise: Promise.resolve({
       numPages: 5,

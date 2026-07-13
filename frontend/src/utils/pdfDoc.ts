@@ -11,7 +11,21 @@ export interface LoadedPdf {
   numPages: number;
   /** 将第 pageNum 页渲染到 canvas，按 cssWidth 适配宽度（自动处理 DPR）。 */
   renderPage(pageNum: number, canvas: HTMLCanvasElement, cssWidth: number): Promise<void>;
+  /**
+   * 返回第 pageNum 页的定位文本项（坐标为按 cssWidth 适配后的 CSS 像素，
+   * 与 renderPage 的显示尺寸一致），供字段高亮匹配使用。
+   * 扫描件没有文本层，返回空数组。
+   */
+  getTextLayout(pageNum: number, cssWidth: number): Promise<PositionedText[]>;
   destroy(): void;
+}
+
+export interface PositionedText {
+  str: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
 export async function loadPdf(base64: string): Promise<LoadedPdf> {
@@ -83,6 +97,30 @@ export async function loadPdf(base64: string): Promise<LoadedPdf> {
       const result = chain.then(run, run);
       chain = result.catch(() => {}); // 渲染失败不打断后续排队
       return result;
+    },
+    async getTextLayout(pageNum: number, cssWidth: number): Promise<PositionedText[]> {
+      const page = await doc.getPage(pageNum);
+      const base = page.getViewport({ scale: 1 });
+      const scale = cssWidth / base.width;
+      const viewport = page.getViewport({ scale });
+      const content = await page.getTextContent();
+
+      const out: PositionedText[] = [];
+      for (const item of content.items) {
+        if (!("str" in item) || !item.str) continue;
+        // item.transform 是 PDF 用户空间的文字矩阵；乘上视口矩阵得到
+        // CSS 像素空间的基线位置与字形高度。
+        const tx = pdfjs.Util.transform(viewport.transform, item.transform);
+        const fontHeight = Math.hypot(tx[2], tx[3]);
+        out.push({
+          str: item.str,
+          left: tx[4],
+          top: tx[5] - fontHeight,
+          width: item.width * scale,
+          height: fontHeight || item.height * scale,
+        });
+      }
+      return out;
     },
     destroy() {
       renderSeq += 1; // 作废所有排队中的渲染

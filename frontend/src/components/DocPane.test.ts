@@ -5,10 +5,12 @@ import DocPane from './DocPane.vue'
 const pdfMocks = vi.hoisted(() => {
   const renderPage = vi.fn(async (_page: number, _canvas: HTMLCanvasElement, _width: number) => {})
   const destroy = vi.fn()
+  const getTextLayout = vi.fn(async (_page: number, _width: number) => [] as { str: string; left: number; top: number; width: number; height: number }[])
   return {
     renderPage,
     destroy,
-    loadPdf: vi.fn(async (_data: string) => ({ numPages: 12, renderPage, destroy })),
+    getTextLayout,
+    loadPdf: vi.fn(async (_data: string) => ({ numPages: 12, renderPage, destroy, getTextLayout })),
   }
 })
 
@@ -32,10 +34,13 @@ beforeEach(() => {
   pdfMocks.loadPdf.mockClear()
   pdfMocks.renderPage.mockClear()
   pdfMocks.destroy.mockClear()
+  pdfMocks.getTextLayout.mockClear()
+  pdfMocks.getTextLayout.mockResolvedValue([])
   pdfMocks.loadPdf.mockImplementation(async () => ({
     numPages: 12,
     renderPage: pdfMocks.renderPage,
     destroy: pdfMocks.destroy,
+    getTextLayout: pdfMocks.getTextLayout,
   }))
 })
 
@@ -175,5 +180,129 @@ describe('DocPane 渲染模式', () => {
 
     wrapper.unmount()
     expect(pdfMocks.destroy).toHaveBeenCalled()
+  })
+})
+
+describe('DocPane 字段高亮', () => {
+  const targets = [
+    {
+      recIndex: 1,
+      fields: [{ key: 'defendant', label: '被告', value: '张三' }],
+    },
+  ]
+
+  it('文本层命中时渲染高亮框与字段标签，点击 emit locate', async () => {
+    pdfMocks.getTextLayout.mockResolvedValue([
+      { str: '被告：张三，男', left: 50, top: 100, width: 70, height: 14 },
+    ])
+    const wrapper = mount(DocPane, {
+      props: {
+        ...baseProps,
+        kind: 'pdf',
+        docData: 'AAAA',
+        highlightTargets: targets,
+        recordsOnPage: [
+          { index: 0, label: 'REC 01' },
+          { index: 1, label: 'REC 02' },
+        ],
+      },
+    })
+    await flush()
+    await flush()
+
+    const hl = wrapper.find('.field-hl')
+    expect(hl.exists()).toBe(true)
+    expect(wrapper.find('.field-hl .tag').text()).toBe('被告')
+    // 角标按记录粒度退位：已高亮的记录 1 隐去角标，未匹配的记录 0 保留定位入口
+    const recLabels = wrapper.findAll('.page-rec').map(b => b.text())
+    expect(recLabels).toEqual(['REC 01'])
+
+    await hl.trigger('click')
+    const events = wrapper.emitted('locate')
+    expect(events).toBeTruthy()
+    expect(events![0][0]).toBe(1)
+  })
+
+  it('flashRecIndex 命中记录时高亮框带闪烁类', async () => {
+    pdfMocks.getTextLayout.mockResolvedValue([
+      { str: '被告：张三，男', left: 50, top: 100, width: 70, height: 14 },
+    ])
+    const wrapper = mount(DocPane, {
+      props: { ...baseProps, kind: 'pdf', docData: 'AAAA', highlightTargets: targets, flashRecIndex: 1 },
+    })
+    await flush()
+    await flush()
+
+    expect(wrapper.find('.field-hl').classes()).toContain('flash')
+  })
+
+  it('无文本层（扫描件）时无高亮，REC 角标保留为定位入口', async () => {
+    pdfMocks.getTextLayout.mockResolvedValue([])
+    const wrapper = mount(DocPane, {
+      props: { ...baseProps, kind: 'pdf', docData: 'AAAA', highlightTargets: targets },
+    })
+    await flush()
+    await flush()
+
+    expect(wrapper.find('.field-hl').exists()).toBe(false)
+    expect(wrapper.find('.page-rec').exists()).toBe(true)
+  })
+
+  it('翻页立即清空旧页高亮，不等新文本层返回', async () => {
+    pdfMocks.getTextLayout.mockResolvedValue([
+      { str: '被告：张三，男', left: 50, top: 100, width: 70, height: 14 },
+    ])
+    const wrapper = mount(DocPane, {
+      props: { ...baseProps, kind: 'pdf', docData: 'AAAA', highlightTargets: targets },
+    })
+    await flush()
+    await flush()
+    expect(wrapper.find('.field-hl').exists()).toBe(true)
+
+    // 新页文本层悬而不决，旧高亮也必须先消失（避免残留在新页画布上）
+    pdfMocks.getTextLayout.mockImplementation(() => new Promise(() => {}))
+    await wrapper.setProps({ currentPage: 2 })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.field-hl').exists()).toBe(false)
+  })
+
+  it('渲染失败时清空高亮，REC 角标恢复为占位页的定位入口', async () => {
+    pdfMocks.getTextLayout.mockResolvedValue([
+      { str: '被告：张三，男', left: 50, top: 100, width: 70, height: 14 },
+    ])
+    const wrapper = mount(DocPane, {
+      props: {
+        ...baseProps,
+        kind: 'pdf',
+        docData: 'AAAA',
+        highlightTargets: targets,
+        recordsOnPage: [{ index: 1, label: 'REC 02' }],
+      },
+    })
+    await flush()
+    await flush()
+    expect(wrapper.find('.field-hl').exists()).toBe(true)
+    expect(wrapper.find('.page-rec').exists()).toBe(false)
+
+    pdfMocks.renderPage.mockRejectedValueOnce(new Error('boom'))
+    await wrapper.setProps({ currentPage: 2 })
+    await flush()
+    await flush()
+
+    expect(wrapper.find('.field-hl').exists()).toBe(false)
+    expect(wrapper.find('.page-rec').exists()).toBe(true) // 占位页上兜底入口不被旧高亮抑制
+  })
+
+  it('页首行的高亮角标翻转到矩形下方，避免被页卡上缘裁掉', async () => {
+    pdfMocks.getTextLayout.mockResolvedValue([
+      { str: '被告：张三，男', left: 50, top: 6, width: 70, height: 14 },
+    ])
+    const wrapper = mount(DocPane, {
+      props: { ...baseProps, kind: 'pdf', docData: 'AAAA', highlightTargets: targets },
+    })
+    await flush()
+    await flush()
+
+    expect(wrapper.find('.field-hl .tag').classes()).toContain('below')
   })
 })

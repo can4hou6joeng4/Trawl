@@ -1,20 +1,36 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
 import { loadPdf, type LoadedPdf } from "../utils/pdfDoc";
+import { computeFieldHighlights, type FieldHighlight } from "../utils/pdfHighlights";
 
-const props = defineProps<{
-  fileName: string;
-  /** 文书类型：pdf 走 pdf.js 渲染，image 直接显示，docx 显示占位页 */
-  kind: "pdf" | "image" | "docx";
-  /** 文书内容（base64），null 表示未加载或读取失败 */
-  docData: string | null;
-  currentPage: number;
-  totalPages: number;
-  /** 产生了记录的页码集合 */
-  recordPages: number[];
-  /** 当前页上的记录（用于页面上的定位入口） */
-  recordsOnPage: { index: number; label: string }[];
-}>();
+export interface HighlightTarget {
+  recIndex: number;
+  fields: { key: string; label: string; value: string }[];
+}
+
+const props = withDefaults(
+  defineProps<{
+    fileName: string;
+    /** 文书类型：pdf 走 pdf.js 渲染，image 直接显示，docx 显示占位页 */
+    kind: "pdf" | "image" | "docx";
+    /** 文书内容（base64），null 表示未加载或读取失败 */
+    docData: string | null;
+    currentPage: number;
+    totalPages: number;
+    /** 产生了记录的页码集合 */
+    recordPages: number[];
+    /** 当前页上的记录（用于页面上的定位入口） */
+    recordsOnPage: { index: number; label: string }[];
+    /** 当前页记录的可见字段值，用于文本层高亮匹配 */
+    highlightTargets?: HighlightTarget[];
+    /** 需要在页面高亮上闪烁的记录下标（「定位原文」回链） */
+    flashRecIndex?: number | null;
+  }>(),
+  {
+    highlightTargets: () => [],
+    flashRecIndex: null,
+  },
+);
 
 const emit = defineEmits<{
   (e: "update:currentPage", page: number): void;
@@ -34,6 +50,12 @@ const canvasEl = ref<HTMLCanvasElement | null>(null);
 const pageCardEl = ref<HTMLElement | null>(null);
 const rendering = ref(false);
 const renderFailed = ref(false);
+const highlights = ref<FieldHighlight[]>([]);
+
+// 已有字段高亮的记录不再显示 REC 角标；未匹配到的记录保留角标作为定位入口
+const unmatchedRecs = computed(() =>
+  props.recordsOnPage.filter((r) => !highlights.value.some((h) => h.recIndex === r.index)),
+);
 
 let pdf: LoadedPdf | null = null;
 let generation = 0; // 防止过期的异步加载/渲染写入新状态
@@ -50,19 +72,55 @@ const showCanvas = computed(() => props.kind === "pdf" && props.docData !== null
 async function renderCurrent() {
   if (!pdf || !canvasEl.value || !pageCardEl.value) return;
   const gen = generation;
+  const page = props.currentPage;
   rendering.value = true;
   try {
     const cssWidth = pageCardEl.value.clientWidth || 340;
-    await pdf.renderPage(props.currentPage, canvasEl.value, cssWidth);
+    await pdf.renderPage(page, canvasEl.value, cssWidth);
     // 渲染成功即自愈：此前偶发的失败不应让画布在本文档内永久退化
     if (gen === generation) renderFailed.value = false;
+    // 仅当本次渲染仍对应当前页时刷新高亮，过期渲染交给最新一次处理
+    if (gen === generation && page === props.currentPage) void refreshHighlights();
   } catch (e) {
+    if (gen !== generation) return; // 换文档/卸载引发的中断属预期，静默
     console.error("PDF 页面渲染失败:", e);
-    if (gen === generation) renderFailed.value = true;
+    renderFailed.value = true;
+    highlights.value = [];
   } finally {
     if (gen === generation) rendering.value = false;
   }
 }
+
+// 在文本层中匹配当前页记录的字段值，生成高亮矩形。
+// 扫描件无文本层 → 匹配不到 → 无高亮（此时保留 REC 角标作为定位入口）。
+async function refreshHighlights() {
+  if (!pdf || props.kind !== "pdf") {
+    highlights.value = [];
+    return;
+  }
+  const gen = generation;
+  const page = props.currentPage;
+  try {
+    // 与画布共用同一宽度基准（renderPage 设置的 CSS 宽），
+    // 容器出现滚动条/窗口调整后重测容器会导致坐标与画布错位
+    const cssWidth = canvasEl.value?.clientWidth || pageCardEl.value?.clientWidth || 340;
+    const items = await pdf.getTextLayout(page, cssWidth);
+    if (gen !== generation || page !== props.currentPage) return; // 已换文档或已翻页
+    highlights.value = computeFieldHighlights(items, props.highlightTargets);
+  } catch (e) {
+    if (gen !== generation) return; // 换文档/卸载使在途请求 reject 属预期，静默
+    console.error("字段高亮计算失败:", e);
+    highlights.value = [];
+  }
+}
+
+// 字段显隐或记录值编辑后重新匹配（人工修正后原文不再匹配属预期：高亮消失）
+watch(
+  () => JSON.stringify(props.highlightTargets),
+  () => {
+    if (pdf) void refreshHighlights();
+  },
+);
 
 watch(
   () => [props.kind, props.docData] as const,
@@ -72,6 +130,7 @@ watch(
     pdf?.destroy();
     pdf = null;
     renderFailed.value = false;
+    highlights.value = [];
 
     if (kind !== "pdf" || !data) return;
     rendering.value = true;
@@ -98,7 +157,10 @@ watch(
 watch(
   () => props.currentPage,
   () => {
-    if (pdf) void renderCurrent();
+    if (pdf) {
+      highlights.value = []; // 翻页即清，避免旧页高亮残留在新页画布上
+      void renderCurrent();
+    }
   },
 );
 
@@ -125,8 +187,24 @@ function go(delta: number) {
     </div>
 
     <div ref="pageCardEl" class="pagecard" :class="{ real: showCanvas || (kind === 'image' && imageSrc) }">
-      <!-- PDF 真实渲染 -->
-      <canvas v-show="showCanvas" ref="canvasEl" class="pdf-canvas"></canvas>
+      <!-- PDF 真实渲染 + 字段高亮覆盖层 -->
+      <div v-show="showCanvas" class="canvas-wrap">
+        <canvas ref="canvasEl" class="pdf-canvas"></canvas>
+        <template v-for="(h, hi) in highlights" :key="hi">
+          <button
+            v-for="(r, ri) in h.rects"
+            :key="ri"
+            class="field-hl"
+            :class="{ flash: flashRecIndex === h.recIndex }"
+            type="button"
+            :style="{ left: r.left - 2 + 'px', top: r.top - 2 + 'px', width: r.width + 4 + 'px', height: r.height + 4 + 'px' }"
+            :title="h.label + ' · 点击定位记录'"
+            @click="emit('locate', h.recIndex)"
+          >
+            <span v-if="ri === 0" class="tag" :class="{ below: r.top < 15 }">{{ h.label }}</span>
+          </button>
+        </template>
+      </div>
       <div v-if="showCanvas && rendering" class="page-loading">
         <span class="spinner"></span>
       </div>
@@ -146,9 +224,9 @@ function go(delta: number) {
         <div v-if="renderFailed" class="page-note">原文渲染失败，已显示占位页</div>
       </template>
 
-      <div v-if="recordsOnPage.length > 0" class="page-recs">
+      <div v-if="unmatchedRecs.length > 0" class="page-recs">
         <button
-          v-for="r in recordsOnPage"
+          v-for="r in unmatchedRecs"
           :key="r.index"
           class="page-rec"
           type="button"
@@ -231,9 +309,53 @@ function go(delta: number) {
   overflow-y: auto;
   scrollbar-width: thin;
 }
+.canvas-wrap {
+  position: relative;
+  width: fit-content;
+  margin: 0 auto;
+}
 .pdf-canvas {
   display: block;
-  margin: 0 auto;
+}
+.field-hl {
+  position: absolute;
+  border: 1.5px solid rgba(24, 178, 93, 0.85);
+  background: rgba(52, 216, 121, 0.16);
+  border-radius: 3px;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.field-hl:hover {
+  background: rgba(52, 216, 121, 0.32);
+}
+.field-hl.flash {
+  animation: hlflash 0.55s ease-in-out 2;
+}
+@keyframes hlflash {
+  50% {
+    background: rgba(52, 216, 121, 0.5);
+    box-shadow: 0 0 0 5px rgba(52, 216, 121, 0.3);
+  }
+}
+.field-hl .tag {
+  position: absolute;
+  top: -14px;
+  left: -1.5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  background: var(--accent-deep);
+  color: #04170c;
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+/* 页首行的矩形：角标翻到矩形下方，避免被页卡上缘裁掉（上方溢出不可滚达） */
+.field-hl .tag.below {
+  top: calc(100% + 1px);
 }
 .doc-image {
   display: block;
