@@ -31,16 +31,7 @@ export default defineConfig({
           lines: 80, branches: 80, functions: 90, statements: 80,
         },
         'src/services/api.ts': {
-          lines: 25, branches: 60, functions: 20, statements: 25,
-        },
-        'src/components/ResultCard.vue': {
-          lines: 90, branches: 70, functions: 90, statements: 90,
-        },
-        'src/components/PreviewTable.vue': {
-          lines: 90, branches: 85, functions: 50, statements: 90,
-        },
-        'src/components/MainDropZone.vue': {
-          lines: 65, branches: 55, functions: 90, statements: 65,
+          lines: 90, branches: 90, functions: 90, statements: 90,
         },
       },
     },

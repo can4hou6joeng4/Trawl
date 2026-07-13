@@ -21,11 +21,13 @@ const state = vi.hoisted(() => ({
   maxConcurrent: 0,
   getPageGates: new Map<number, { promise: Promise<void>; resolve: (v: void) => void; reject: (e: unknown) => void }>(),
   renderShouldReject: false,
+  textItems: [] as unknown[],
 }))
 
 function makePage(num: number) {
   return {
-    getViewport: ({ scale }: { scale: number }) => ({ width: 595 * scale, height: 842 * scale }),
+    getViewport: ({ scale }: { scale: number }) => ({ width: 595 * scale, height: 842 * scale, transform: [scale, 0, 0, scale, 0, 0] }),
+    getTextContent: async () => ({ items: state.textItems }),
     render: () => {
       state.renderingNow += 1
       state.maxConcurrent = Math.max(state.maxConcurrent, state.renderingNow)
@@ -75,6 +77,7 @@ beforeEach(() => {
   state.maxConcurrent = 0
   state.getPageGates.clear()
   state.renderShouldReject = false
+  state.textItems = []
 })
 
 describe('pdfDoc 渲染调度', () => {
@@ -150,6 +153,42 @@ describe('pdfDoc 渲染调度', () => {
     state.renderShouldReject = false
     await doc.renderPage(2, canvas, 340)
     expect(state.renderCalls.map(c => c.page)).toEqual([1, 2])
+    doc.destroy()
+  })
+})
+
+describe('pdfDoc 文本层', () => {
+  it('getTextLayout 将文本项换算为 CSS 像素坐标，跳过无字项', async () => {
+    state.textItems = [
+      { str: '被告：张三', transform: [12, 0, 0, 12, 50, 700], width: 60, height: 12 },
+      { type: 'beginMarkedContent' }, // 无 str 的标记项：跳过
+      { str: '', transform: [12, 0, 0, 12, 0, 0], width: 0, height: 12 }, // 空串：跳过
+    ]
+    const doc = await loadPdf('AAAA')
+    // cssWidth 297.5 → scale 0.5（基准页宽 595）
+    const items = await doc.getTextLayout(1, 297.5)
+
+    expect(items).toHaveLength(1)
+    // mock 的 Util.transform 原样返回文字矩阵：字形高 12，基线 y=700 → top=688
+    expect(items[0]).toEqual({ str: '被告：张三', left: 50, top: 688, width: 30, height: 12 })
+    doc.destroy()
+  })
+
+  it('getTextLayout 字形高度为 0 时回退 item.height×scale', async () => {
+    state.textItems = [{ str: 'X', transform: [12, 0, 0, 0, 10, 20], width: 10, height: 14 }]
+    const doc = await loadPdf('AAAA')
+    const items = await doc.getTextLayout(1, 595) // scale 1
+
+    expect(items).toHaveLength(1)
+    expect(items[0].height).toBe(14)
+    expect(items[0].top).toBe(20)
+    doc.destroy()
+  })
+
+  it('getTextLayout 空文本层（扫描件）返回空数组', async () => {
+    state.textItems = []
+    const doc = await loadPdf('AAAA')
+    await expect(doc.getTextLayout(1, 340)).resolves.toEqual([])
     doc.destroy()
   })
 })
