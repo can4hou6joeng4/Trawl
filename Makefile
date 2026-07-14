@@ -62,6 +62,12 @@ gateway:
 	@echo "🛰  Building OCR gateway..."
 	go build -trimpath -ldflags "-s -w" -o $(BUILD_DIR)/ocr-gateway ./cmd/ocr-gateway
 
+# 为客户机器生成激活码（所有者运维）：make license MACHINE=XXXXXXXX
+# 密钥来源：环境变量 LICENSE_SECRET 或 ~/.secrets/license-secret
+license:
+	@test -n "$(MACHINE)" || { echo "用法: make license MACHINE=机器码（应用激活界面显示的 8 位码）"; exit 1; }
+	@go run ./cmd/license-gen $(MACHINE)
+
 # ===== Setup =====
 
 # Install dependencies (Homebrew required)
@@ -84,4 +90,4 @@ clean:
 	rm -rf dist/
 	@echo "✅ Done."
 
-.PHONY: all test lint fmt vet check mac mac-universal mac-amd64 mac-arm64 windows windows-installer gateway deps clean
+.PHONY: all test lint fmt vet check mac mac-universal mac-amd64 mac-arm64 windows windows-installer gateway license deps clean

@@ -91,3 +91,7 @@ curl -X POST https://你的域名/api/v2/ocr/jobs      # 无机器码 → 401
 - 日志每请求一行（机器码/档位/状态码），**永不打印 Token**。
 - Go 版配额为单实例内存计量；Workers 版存 Durable Object，天然跨实例。
 - 应急：网关故障时，用户可在 `config/conf.yaml` 填自备 Token 直连官方接口（覆盖链）。
+- **给客户发激活码**：`make license MACHINE=XXXXXXXX`（机器码即应用激活界面
+  显示的 8 位码；密钥读环境变量 `LICENSE_SECRET` 或 `~/.secrets/license-secret`，
+  须与网关的 `OCR_GW_LICENSE_SECRET`、发布构建注入值三方一致）。
+  激活后客户自动享网关授权档额度。
