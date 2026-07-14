@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -11,6 +12,9 @@ func TestReleaseWorkflowDoesNotEmbedCloudSecrets(t *testing.T) {
 
 	for _, forbidden := range []string{
 		"BAIDU_TOKEN",
+		"OCR_TOKEN",
+		"OCR_GW_TOKEN",          // 网关的上游密钥只存在于网关部署环境，永不进入应用构建
+		"OCR_GW_LICENSE_SECRET", // 同上：网关侧授权校验密钥
 		"TENCENT_SECRET_ID",
 		"TENCENT_SECRET_KEY",
 		"baked_conf.yaml",
@@ -19,6 +23,20 @@ func TestReleaseWorkflowDoesNotEmbedCloudSecrets(t *testing.T) {
 		if strings.Contains(workflow, forbidden) {
 			t.Fatalf("release workflow must not embed cloud credential material: found %q", forbidden)
 		}
+	}
+}
+
+// TestConfigTemplateShipsNoCredential 守护「密钥永不随应用分发」（PRD 路线③）：
+// 配置模板的 token 必须为空串，云端能力经中继网关（gateway_url 非密钥）提供。
+func TestConfigTemplateShipsNoCredential(t *testing.T) {
+	cfg := readTextFile(t, "internal/config/config.go")
+
+	if !strings.Contains(cfg, `token: ""`) {
+		t.Fatal("conf.yaml 模板的 ocr.token 必须为空串")
+	}
+	// AI Studio token 形态为 40 位十六进制：源码任何位置不得出现类似明文
+	if tokenLike := regexp.MustCompile(`"[0-9a-f]{40}"`); tokenLike.MatchString(cfg) {
+		t.Fatal("配置源码中疑似出现云端密钥明文")
 	}
 }
 

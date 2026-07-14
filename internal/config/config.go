@@ -67,13 +67,21 @@ func GetTrialStatus() TrialStatus {
 
 // Config 应用配置结构
 type Config struct {
-	Baidu BaiduConfig `mapstructure:"baidu"`
+	Baidu BaiduConfig `mapstructure:"baidu"` // 旧配置节：仅 token 迁移读取（等价 ocr.token）
+	Ocr   OcrConfig   `mapstructure:"ocr"`
 }
 
-// BaiduConfig 百度 OCR 配置
+// BaiduConfig 旧版配置节（v4.1 及之前），保留供老用户的 token 继续生效
 type BaiduConfig struct {
-	Token  string `mapstructure:"token"`
-	ApiUrl string `mapstructure:"api_url"`
+	Token string `mapstructure:"token"`
+}
+
+// OcrConfig 云端 OCR 配置（v2 作业式接口）
+type OcrConfig struct {
+	Token      string `mapstructure:"token"`       // 自备 AI Studio Token → 直连官方接口（优先于网关）
+	JobUrl     string `mapstructure:"job_url"`     // 直连模式作业接口
+	GatewayUrl string `mapstructure:"gateway_url"` // 中继网关作业接口（应用不携带密钥）
+	Model      string `mapstructure:"model"`
 }
 
 var (
@@ -95,9 +103,13 @@ func Init(configPath string) error {
 		baseDir = "." // 回退到当前目录
 	}
 
-	// 设置默认值。云 OCR Token 必须来自用户本地配置或环境变量，公开构建不内置密钥。
+	// 设置默认值。云 OCR 密钥绝不内置——请求经中继网关换真实 Token，
+	// 或由用户自备 Token 直连（gateway_url 默认值在网关部署后随发布回填）。
 	v.SetDefault("baidu.token", "")
-	v.SetDefault("baidu.api_url", "https://n1544et5uec1tbh9.aistudio-app.com/layout-parsing")
+	v.SetDefault("ocr.token", "")
+	v.SetDefault("ocr.job_url", "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs")
+	v.SetDefault("ocr.gateway_url", "")
+	v.SetDefault("ocr.model", "PaddleOCR-VL-1.6")
 
 	// 绑定环境变量 (前缀 LEGAL_EXTRACTOR_)
 	v.SetEnvPrefix("LEGAL_EXTRACTOR")
@@ -169,11 +181,12 @@ func ensureConfigFile(configPath string) error {
 	// 写入默认配置
 	defaultConfig := `# Legal Extractor 配置文件
 # 支持通过环境变量覆盖，前缀为 LEGAL_EXTRACTOR_
-# 例如: LEGAL_EXTRACTOR_BAIDU_TOKEN=xxx
+# 例如: LEGAL_EXTRACTOR_OCR_TOKEN=xxx
 
-baidu:
-  token: ""      # 百度 AI Studio Token
-  api_url: "https://n1544et5uec1tbh9.aistudio-app.com/layout-parsing"
+ocr:
+  token: ""        # 可选：自备 AI Studio Token 时直连官方接口（优先于网关）
+  gateway_url: ""  # OCR 中继网关地址（发布版内置默认值，无需修改）
+  model: "PaddleOCR-VL-1.6"
 `
 	return os.WriteFile(configPath, []byte(defaultConfig), 0644)
 }
@@ -186,10 +199,28 @@ func Get() *Config {
 	return cfg
 }
 
-// GetBaidu 获取百度配置
-func GetBaidu() BaiduConfig {
-	if cfg == nil {
-		return BaiduConfig{}
+// GetOcr 获取云端 OCR 配置。经 viper 实时读取：环境变量修改即刻生效，
+// conf.yaml 修改需重启应用。旧版 baidu.token 迁移生效（等价 ocr.token）。
+func GetOcr() OcrConfig {
+	if v == nil {
+		return OcrConfig{}
 	}
-	return cfg.Baidu
+	o := OcrConfig{
+		Token:      v.GetString("ocr.token"),
+		JobUrl:     v.GetString("ocr.job_url"),
+		GatewayUrl: v.GetString("ocr.gateway_url"),
+		Model:      v.GetString("ocr.model"),
+	}
+	if o.Token == "" {
+		o.Token = v.GetString("baidu.token")
+	}
+	return o
+}
+
+// GetLicenseKey 返回已保存的授权码（未激活为空串），供网关鉴权头使用。
+func GetLicenseKey() string {
+	if v == nil {
+		return ""
+	}
+	return v.GetString("license_key")
 }

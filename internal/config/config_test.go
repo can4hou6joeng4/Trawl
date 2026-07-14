@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 func TestGetTrialStatus_DevMode(t *testing.T) {
@@ -151,14 +153,38 @@ func TestGet(t *testing.T) {
 	}
 }
 
-func TestGetBaidu(t *testing.T) {
-	origCfg := cfg
-	cfg = nil
-	defer func() { cfg = origCfg }()
+func TestGetOcr(t *testing.T) {
+	origV := v
+	defer func() { v = origV }()
 
-	b := GetBaidu()
-	if b.Token != "" {
-		t.Errorf("未初始化时 Token 应为空，实际 %q", b.Token)
+	// 未初始化时应返回空配置
+	v = nil
+	o := GetOcr()
+	if o.Token != "" || o.GatewayUrl != "" {
+		t.Errorf("未初始化时应为空配置，实际 %+v", o)
+	}
+
+	// 旧版 baidu.token 迁移生效（等价 ocr.token）
+	v = viper.New()
+	v.Set("baidu.token", "legacy")
+	if got := GetOcr().Token; got != "legacy" {
+		t.Errorf("旧 baidu.token 应迁移生效，实际 %q", got)
+	}
+
+	// ocr.token 优先于旧配置
+	v.Set("ocr.token", "new")
+	if got := GetOcr().Token; got != "new" {
+		t.Errorf("ocr.token 应优先，实际 %q", got)
+	}
+}
+
+func TestGetLicenseKey_NoViper(t *testing.T) {
+	origV := v
+	v = nil
+	defer func() { v = origV }()
+
+	if GetLicenseKey() != "" {
+		t.Error("viper 未初始化时授权码应为空")
 	}
 }
 

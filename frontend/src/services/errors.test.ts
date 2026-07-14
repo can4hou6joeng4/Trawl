@@ -4,7 +4,7 @@ import { friendlyErrorMessage, isCancelledError } from './errors';
 describe('friendlyErrorMessage', () => {
   it('映射已知错误码为中文文案', () => {
     expect(friendlyErrorMessage('PDF_ENCRYPTED_OR_LOCKED')).toContain('PDF 已加密');
-    expect(friendlyErrorMessage('BAIDU_TOKEN_MISSING')).toContain('百度 OCR Token');
+    expect(friendlyErrorMessage('BAIDU_TOKEN_MISSING')).toContain('云端识别服务未配置');
     expect(friendlyErrorMessage('CANCELLED')).toBe('操作已取消');
   });
 

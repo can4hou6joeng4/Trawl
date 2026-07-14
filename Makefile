@@ -57,6 +57,11 @@ windows-installer:
 	@echo "🪟 Building Windows installer (amd64)..."
 	wails build -platform windows/amd64 -nsis
 
+# OCR 中继网关（自部署，见 docs/ocr-gateway-deploy.md）
+gateway:
+	@echo "🛰  Building OCR gateway..."
+	go build -trimpath -ldflags "-s -w" -o $(BUILD_DIR)/ocr-gateway ./cmd/ocr-gateway
+
 # ===== Setup =====
 
 # Install dependencies (Homebrew required)
@@ -79,4 +84,4 @@ clean:
 	rm -rf dist/
 	@echo "✅ Done."
 
-.PHONY: all test lint fmt vet check mac mac-universal mac-amd64 mac-arm64 windows windows-installer deps clean
+.PHONY: all test lint fmt vet check mac mac-universal mac-amd64 mac-arm64 windows windows-installer gateway deps clean

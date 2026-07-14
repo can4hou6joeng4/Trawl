@@ -11,7 +11,7 @@ const ERROR_CODE_MESSAGES: { [code: string]: string } = {
   PDF_ENCRYPTED_OR_LOCKED:
     "PDF 已加密或受保护，无法解析。请先解除文档限制后重试。",
   BAIDU_TOKEN_MISSING:
-    "未配置百度 OCR Token：扫描件与图片识别需要云端引擎。请在 config/conf.yaml 或环境变量 LEGAL_EXTRACTOR_BAIDU_TOKEN 配置后重试。",
+    "云端识别服务未配置：扫描件与图片识别需要云端引擎。请在 config/conf.yaml 的 ocr 配置节填写网关地址（gateway_url）或自备 Token（token）后重试。",
   CANCELLED: "操作已取消",
 };
 

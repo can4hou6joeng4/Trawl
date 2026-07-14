@@ -54,17 +54,17 @@ func (e *Extractor) extractPdf(ctx context.Context, fileData []byte, fields []st
 
 	e.logger.Info("未检测到 PDF 文本层或文本过少，切换至 [云端识别] 模式")
 
-	// 3. 如果配置了百度 Token，则优先使用百度 PaddleOCR-VL (Layout Parsing)
-	if e.baiduClient.HasToken() {
-		e.logger.Info("使用 [百度云端引擎] 进行解析")
-		return e.baiduClient.ParseDocument(ctx, fileData, totalPages, true, onProgress)
+	// 3. 云端识别可用（网关或自备 Token）则优先使用 PaddleOCR-VL 作业式接口
+	if e.ocrClient.CloudAvailable() {
+		e.logger.Info("使用 [云端识别引擎] 进行解析")
+		return e.ocrClient.ParseDocument(ctx, fileData, totalPages, true, onProgress)
 	}
 
 	if runtime.GOOS != "windows" {
-		return ExtractOutput{}, fmt.Errorf("%w: 扫描件或无文本层 PDF 需要配置百度 OCR Token", ErrTokenMissing)
+		return ExtractOutput{}, fmt.Errorf("%w: 扫描件或无文本层 PDF 需要云端服务（网关或自备 Token）", ErrTokenMissing)
 	}
 
-	e.logger.Info("未配置百度 Token，回退至 [本地系统识别] 模式")
+	e.logger.Info("云端服务未配置，回退至 [本地系统识别] 模式")
 	records, err := e.extractViaWinOcr(ctx, fileData, totalPages, onProgress)
 	return ExtractOutput{Records: records}, err
 }

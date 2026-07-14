@@ -21,9 +21,9 @@ const defaultCacheCapacity = 50
 //   - DOCX 解析：                      docx.go
 //   - 正则解析与文本归并：              parsing.go
 type Extractor struct {
-	logger      *slog.Logger
-	baiduClient *BaiduClient
-	cache       *RecordCache
+	logger    *slog.Logger
+	ocrClient *OcrClient
+	cache     *RecordCache
 }
 
 // NewExtractor 创建一个新的提取器实例
@@ -32,9 +32,9 @@ func NewExtractor(logger *slog.Logger) *Extractor {
 		logger = slog.Default()
 	}
 	return &Extractor{
-		logger:      logger,
-		baiduClient: NewBaiduClient(logger),
-		cache:       NewRecordCache(defaultCacheCapacity),
+		logger:    logger,
+		ocrClient: NewOcrClient(logger),
+		cache:     NewRecordCache(defaultCacheCapacity),
 	}
 }
 
@@ -78,11 +78,11 @@ func (e *Extractor) ExtractData(ctx context.Context, fileData []byte, fileName s
 	case ".pdf":
 		out, err = e.extractPdf(ctx, fileData, fields, onProgress)
 	case ".jpg", ".jpeg", ".png":
-		if !e.baiduClient.HasToken() {
-			return ExtractOutput{}, fmt.Errorf("%w: 图片识别需要配置百度 OCR Token", ErrTokenMissing)
+		if !e.ocrClient.CloudAvailable() {
+			return ExtractOutput{}, fmt.Errorf("%w: 图片识别需要云端服务（网关或自备 Token）", ErrTokenMissing)
 		}
-		e.logger.Info("使用 [百度云端引擎] 识别图片", "file", fileName)
-		out, err = e.baiduClient.ParseDocument(ctx, fileData, 1, false, onProgress)
+		e.logger.Info("使用 [云端识别引擎] 识别图片", "file", fileName)
+		out, err = e.ocrClient.ParseDocument(ctx, fileData, 1, false, onProgress)
 	case ".docx":
 		e.logger.Info("使用本地原生逻辑提取 DOCX", "file", fileName)
 		var records []Record

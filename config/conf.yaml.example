@@ -1,8 +1,8 @@
-# Legal Extractor 配置文件
-# 支持通过环境变量覆盖，前缀为 LEGAL_EXTRACTOR_
-# 例如: LEGAL_EXTRACTOR_BAIDU_API_KEY=xxx
+# Legal Extractor 配置文件示例
+# 复制为 conf.yaml 使用；支持环境变量覆盖，前缀 LEGAL_EXTRACTOR_
+# 例如: LEGAL_EXTRACTOR_OCR_TOKEN=xxx
 
-baidu:
-  app_id: "" # 百度 AI AppID
-  api_key: "" # 百度 AI API Key
-  secret_key: "" # 百度 AI Secret Key
+ocr:
+  token: ""        # 可选：自备 AI Studio Token 时直连官方接口（优先于网关）
+  gateway_url: ""  # OCR 中继网关地址（发布版内置默认值，无需修改）
+  model: "PaddleOCR-VL-1.6"
