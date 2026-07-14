@@ -1,0 +1,29 @@
+# Legal Extractor OCR 中继网关（Cloudflare Workers）
+# 部署：npx wrangler deploy（前置步骤见 docs/ocr-gateway-deploy.md）
+name = "legal-extractor-ocr-gw"
+main = "src/index.ts"
+compatibility_date = "2025-09-06"
+
+# 自定义域名路由：workers.dev 子域在境内不可用，必须绑定自有域名。
+# 部署时替换为实际主机名（域名须已托管在同一 Cloudflare 账号）。
+# routes = [
+#   { pattern = "ocr-gw.example.com", custom_domain = true }
+# ]
+
+[[durable_objects.bindings]]
+name = "METER"
+class_name = "Meter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Meter"]
+
+[vars]
+# UPSTREAM_JOB_URL = "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs"
+TRIAL_DAILY = "20"
+LICENSED_DAILY = "200"
+PER_MINUTE = "120"
+
+# Secrets（不入库，逐个执行）：
+#   npx wrangler secret put OCR_GW_TOKEN            # 真实 AI Studio Token（建议先轮换）
+#   npx wrangler secret put OCR_GW_LICENSE_SECRET   # 与应用发布构建注入的 LicenseSecret 一致

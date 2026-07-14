@@ -1,0 +1,18 @@
+{
+  "name": "legal-extractor-ocr-gateway",
+  "private": true,
+  "type": "module",
+  "description": "Legal Extractor OCR 中继网关（Cloudflare Workers 版）",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.4",
+    "@cloudflare/workers-types": "^5.20260714.1",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.110.0"
+  }
+}
