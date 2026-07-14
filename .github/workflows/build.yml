@@ -34,6 +34,8 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Wails App
+        env:
+          LICENSE_SECRET: ${{ secrets.LICENSE_SECRET }}
         run: |
           cd frontend
           npm install
@@ -43,9 +45,9 @@ jobs:
           # 清除 Go 构建缓存，确保每次完整重新编译
           go clean -cache
 
-          # 注入构建时间戳并构建原生应用
+          # 注入构建时间戳与授权密钥（激活码校验依赖）并构建原生应用
           BUILD_TIME=$(date +%s)
-          wails build -platform darwin/universal -s -ldflags "-X 'legal-extractor/internal/config.BuildTime=$BUILD_TIME'"
+          wails build -platform darwin/universal -s -ldflags "-X 'legal-extractor/internal/config.BuildTime=$BUILD_TIME' -X 'legal-extractor/internal/config.LicenseSecret=$LICENSE_SECRET'"
 
       - name: Create DMG (Manual Method)
         run: |
@@ -132,6 +134,8 @@ jobs:
 
       - name: Build Wails App
         shell: powershell
+        env:
+          LICENSE_SECRET: ${{ secrets.LICENSE_SECRET }}
         run: |
           cd frontend
           npm install
@@ -141,10 +145,10 @@ jobs:
           # 清除 Go 构建缓存，确保每次完整重新编译
           go clean -cache
 
-          # 注入构建时间戳并构建原生应用
+          # 注入构建时间戳与授权密钥（激活码校验依赖）并构建原生应用
           $BUILD_TIME = [int][double]::Parse((Get-Date -UFormat %s))
-          wails build -platform windows/amd64 -s -ldflags "-X 'legal-extractor/internal/config.BuildTime=$BUILD_TIME'"
-          wails build -platform windows/amd64 -nsis -s -ldflags "-X 'legal-extractor/internal/config.BuildTime=$BUILD_TIME'"
+          wails build -platform windows/amd64 -s -ldflags "-X 'legal-extractor/internal/config.BuildTime=$BUILD_TIME' -X 'legal-extractor/internal/config.LicenseSecret=$env:LICENSE_SECRET'"
+          wails build -platform windows/amd64 -nsis -s -ldflags "-X 'legal-extractor/internal/config.BuildTime=$BUILD_TIME' -X 'legal-extractor/internal/config.LicenseSecret=$env:LICENSE_SECRET'"
 
       - name: Package Windows
         shell: powershell

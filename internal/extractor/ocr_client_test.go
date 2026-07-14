@@ -427,11 +427,26 @@ func TestOcrClient_TransientPollErrorsTolerated(t *testing.T) {
 	}
 }
 
-func TestOcrClient_NoCloudConfigured(t *testing.T) {
+func TestOcrClient_DefaultGatewayBaked(t *testing.T) {
+	// 发布默认内置官方网关：纯默认配置下云端恒可用（用户零配置）
 	withOcrEnv(t, map[string]string{})
 	c := newTestClient()
+	if !c.CloudAvailable() {
+		t.Fatal("默认配置应内置网关，云端恒可用")
+	}
+	if got := config.GetOcr().GatewayUrl; !strings.Contains(got, "ocr-gw.bobochang.cn") {
+		t.Fatalf("默认网关地址错误: %q", got)
+	}
+}
+
+func TestOcrClient_UnconfiguredReturnsTokenMissing(t *testing.T) {
+	// 配置未初始化（开发裸跑/异常路径）→ ErrTokenMissing 哨兵
+	config.ResetForTest()
+	t.Cleanup(func() { _ = config.Init("") })
+
+	c := newTestClient()
 	if c.CloudAvailable() {
-		t.Fatal("未配置任何云端时 CloudAvailable 应为 false")
+		t.Fatal("配置未初始化时 CloudAvailable 应为 false")
 	}
 	_, err := c.ParseDocument(context.Background(), []byte("x"), 1, true, nil)
 	if err == nil || !strings.Contains(err.Error(), ErrTokenMissing.Error()) {

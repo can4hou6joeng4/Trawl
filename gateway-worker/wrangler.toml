@@ -5,10 +5,10 @@ main = "src/index.ts"
 compatibility_date = "2025-09-06"
 
 # 自定义域名路由：workers.dev 子域在境内不可用，必须绑定自有域名。
-# 部署时替换为实际主机名（域名须已托管在同一 Cloudflare 账号）。
-# routes = [
-#   { pattern = "ocr-gw.example.com", custom_domain = true }
-# ]
+# （域名须已托管在同一 Cloudflare 账号）
+routes = [
+  { pattern = "ocr-gw.bobochang.cn", custom_domain = true }
+]
 
 [[durable_objects.bindings]]
 name = "METER"

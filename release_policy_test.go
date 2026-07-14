@@ -40,6 +40,16 @@ func TestConfigTemplateShipsNoCredential(t *testing.T) {
 	}
 }
 
+// TestReleaseWorkflowInjectsLicenseSecret 守护激活体系端到端可用：
+// 发布构建必须注入 LicenseSecret（历史版本曾漏注入导致激活码永远无效）。
+func TestReleaseWorkflowInjectsLicenseSecret(t *testing.T) {
+	workflow := readReleaseWorkflow(t)
+
+	if !strings.Contains(workflow, "config.LicenseSecret=") {
+		t.Fatal("release workflow 必须经 ldflags 注入 config.LicenseSecret，否则发布产物无法激活")
+	}
+}
+
 func TestReleaseWorkflowPublishesDesktopInstallerMatrix(t *testing.T) {
 	workflow := readReleaseWorkflow(t)
 

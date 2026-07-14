@@ -104,11 +104,11 @@ func Init(configPath string) error {
 	}
 
 	// 设置默认值。云 OCR 密钥绝不内置——请求经中继网关换真实 Token，
-	// 或由用户自备 Token 直连（gateway_url 默认值在网关部署后随发布回填）。
+	// 或由用户自备 Token 直连。
 	v.SetDefault("baidu.token", "")
 	v.SetDefault("ocr.token", "")
 	v.SetDefault("ocr.job_url", "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs")
-	v.SetDefault("ocr.gateway_url", "")
+	v.SetDefault("ocr.gateway_url", "https://ocr-gw.bobochang.cn/api/v2/ocr/jobs")
 	v.SetDefault("ocr.model", "PaddleOCR-VL-1.6")
 
 	// 绑定环境变量 (前缀 LEGAL_EXTRACTOR_)
@@ -185,7 +185,7 @@ func ensureConfigFile(configPath string) error {
 
 ocr:
   token: ""        # 可选：自备 AI Studio Token 时直连官方接口（优先于网关）
-  gateway_url: ""  # OCR 中继网关地址（发布版内置默认值，无需修改）
+  gateway_url: "https://ocr-gw.bobochang.cn/api/v2/ocr/jobs"  # OCR 中继网关（默认即可用）
   model: "PaddleOCR-VL-1.6"
 `
 	return os.WriteFile(configPath, []byte(defaultConfig), 0644)
@@ -223,4 +223,10 @@ func GetLicenseKey() string {
 		return ""
 	}
 	return v.GetString("license_key")
+}
+
+// ResetForTest 清空全局配置状态，仅供测试构造「配置未初始化」场景使用。
+func ResetForTest() {
+	cfg = nil
+	v = nil
 }

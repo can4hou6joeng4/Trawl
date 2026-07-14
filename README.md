@@ -33,12 +33,13 @@
 
 ## ✨ Features
 
-- 🗂️ **v4.1 Evidence Desk UI** - Real source pages rendered beside structured records; extracted fields are highlighted in place on the page with two-way locate between page and record.
+- 🗂️ **v4.2 Evidence Desk UI** - Real source pages rendered beside structured records; extracted fields are highlighted in place — on text-layer PDFs, scanned PDFs and photos alike — with two-way locate between page and record.
+- 🔑 **Zero-config OCR** - Scanned documents work out of the box through the credential-free relay gateway; no token to apply for.
 - 📄 **Smart Parsing** - Auto-detect `.docx`, `.pdf`, and image (`.jpg` / `.png`) legal documents.
 - ✏️ **Review-then-Export** - Edit extracted values directly on record cards; manual corrections flow into the export.
 - 🎯 **Precise Extraction** - Extract key fields (defendant, ID, requests, facts) with per-field visibility toggles.
 - ⚡ **Parallel Processing** - 300% faster text extraction using Go Goroutines.
-- 🧩 **Physical Slicing** - Support for 50+ pages long PDF documents.
+- 🧩 **Long Documents** - 50+ page PDFs handled in a single cloud job with real per-page progress.
 - 💾 **Multi-format Export** - Support Excel (.xlsx), CSV, and JSON.
 
 ---
@@ -86,21 +87,18 @@ wails dev
 
 ## ⚙️ Configuration
 
-### Baidu OCR (Required for PDF)
+**Works out of the box** — scanned PDFs and images are recognized through the official OCR relay gateway; no token or setup required. The app ships with **zero cloud credentials**: requests carry your machine ID, and the gateway meters usage (trial tier daily quota; licensed tier gets more).
 
-The project uses Baidu AI Studio (PaddleOCR-VL) for high-precision document analysis.
+**Optional: bring your own AI Studio token** (takes priority over the gateway; also a fallback if the gateway is unreachable). Create `config/conf.yaml`:
+
+```yaml
+ocr:
+  token: "your_aistudio_token"   # direct connection to the official API
+```
+
+Or via environment variable: `LEGAL_EXTRACTOR_OCR_TOKEN`. Legacy `baidu.token` configs keep working.
 
 📖 **[Read the Full Configuration Guide](docs/user/CONFIG_GUIDE.md)**
-
-**Option 1: Environment Variables**
-- `LEGAL_EXTRACTOR_BAIDU_TOKEN` (Access Token for Baidu Cloud)
-
-**Option 2: Configuration File**
-Create `config/conf.yaml`:
-```yaml
-baidu:
-  token: "your_baidu_token"
-```
 
 ---
 

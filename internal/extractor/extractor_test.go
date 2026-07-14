@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"legal-extractor/internal/config"
 	"runtime"
 	"strings"
 	"testing"
@@ -206,8 +207,10 @@ func TestExtractData_UnsupportedFormat(t *testing.T) {
 }
 
 func TestExtractData_ImageWithoutToken(t *testing.T) {
-	// 图片识别依赖百度云端 OCR；未配置 Token 时应返回 ErrTokenMissing
-	// 而非不支持的格式（测试环境不初始化 config，Token 恒为空）。
+	// 图片识别依赖云端 OCR；配置未初始化（无网关无 Token）时应返回
+	// ErrTokenMissing 而非不支持的格式。显式复位以隔离其他用例的配置状态。
+	config.ResetForTest()
+	t.Cleanup(func() { _ = config.Init("") })
 	e := NewExtractor(nil)
 	for _, name := range []string{"test.jpg", "test.jpeg", "test.png"} {
 		_, err := e.ExtractData(context.Background(), []byte("data"), name, []string{"defendant"}, nil)

@@ -8,14 +8,16 @@ import (
 	"legal-extractor/internal/config"
 )
 
-// TestLive_DirectModeAgainstRealEndpoint 持真实 Token 对生产端点做全链路回归：
+// TestLive_DirectModeAgainstRealEndpoint 持真实凭据对生产端点做全链路回归：
 // 提交 → 轮询 → JSONL 下载 → 记录与块级坐标聚合。默认跳过，按需执行：
 //
-//	OCR_LIVE_TOKEN=xxx OCR_LIVE_FILE=/path/to/scan.pdf go test -run TestLive -v ./internal/extractor/
+//	直连：OCR_LIVE_TOKEN=xxx OCR_LIVE_FILE=/path/to/scan.pdf go test -run TestLive -v ./internal/extractor/
+//	网关：OCR_LIVE_GATEWAY=https://gw.example.com/api/v2/ocr/jobs OCR_LIVE_FILE=... go test -run TestLive -v ./internal/extractor/
 func TestLive_DirectModeAgainstRealEndpoint(t *testing.T) {
 	token := os.Getenv("OCR_LIVE_TOKEN")
-	if token == "" {
-		t.Skip("未提供 OCR_LIVE_TOKEN，跳过真实端点回归")
+	gatewayURL := os.Getenv("OCR_LIVE_GATEWAY")
+	if token == "" && gatewayURL == "" {
+		t.Skip("未提供 OCR_LIVE_TOKEN 或 OCR_LIVE_GATEWAY，跳过真实端点回归")
 	}
 	file := os.Getenv("OCR_LIVE_FILE")
 	if file == "" {
@@ -26,12 +28,17 @@ func TestLive_DirectModeAgainstRealEndpoint(t *testing.T) {
 		t.Fatalf("读取样张失败: %v", err)
 	}
 
-	t.Setenv("LEGAL_EXTRACTOR_OCR_TOKEN", token)
+	if token != "" {
+		t.Setenv("LEGAL_EXTRACTOR_OCR_TOKEN", token)
+	} else {
+		t.Setenv("LEGAL_EXTRACTOR_OCR_GATEWAY_URL", gatewayURL)
+	}
 	if err := config.Init(""); err != nil {
 		t.Fatalf("config.Init: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = os.Unsetenv("LEGAL_EXTRACTOR_OCR_TOKEN")
+		_ = os.Unsetenv("LEGAL_EXTRACTOR_OCR_GATEWAY_URL")
 		_ = config.Init("")
 	})
 
