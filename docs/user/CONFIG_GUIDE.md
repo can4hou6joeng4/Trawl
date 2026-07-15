@@ -1,41 +1,63 @@
-# 百度 OCR 配置指南 (v3.0.0)
+# 配置指南
 
-Legal Extractor v3.0 已全面迁移至百度 AI 引擎。为了处理 PDF 文档和图片扫描件，您需要配置百度云 Access Token。
+> 适用版本：v4.2.0 及以上 ｜ 上手与功能说明见 [使用手册](USER_GUIDE.md)
 
-> **注意**：处理 .docx (Word) 原生文件不需要此配置。
+## 默认无需任何配置
 
-## 步骤 1：获取百度 Access Token
+v4.2.0 起，扫描件与照片的云端识别默认经**官方中继网关**完成：
+应用不携带、也不要求用户申请任何云服务密钥。安装即用。
 
-1. 登录 [百度智能云控制台](https://console.bce.baidu.com/)。
-2. 在搜索栏输入 **"文字识别"** 并进入。
-3. 创建应用并获取 `API Key` 和 `Secret Key`。
-4. 按照百度官方文档获取 `Access Token`。
+网关按机器每日计量（试用 20 次/日、激活 200 次/日）。以下配置全部为**可选**。
 
-## 步骤 2：配置软件
+## 配置文件位置
 
-### 方式一：修改用户配置文件 (推荐)
+应用可执行文件同级的 `config/conf.yaml`，首次运行自动生成模板：
 
-在应用程序同级目录或开发项目根目录创建 `config/conf.yaml`：
+- **macOS**：`legal-extractor.app/Contents/MacOS/config/conf.yaml`
+  （访达中对应用右键 → 显示包内容）
+- **Windows**：安装目录下 `config\conf.yaml`
 
 ```yaml
-baidu:
-  token: "您的百度AccessToken"
+ocr:
+  token: ""        # 可选：自备 AI Studio Token 时直连官方接口（优先于网关）
+  gateway_url: "https://ocr-gw.bobochang.cn/api/v2/ocr/jobs"  # OCR 中继网关
+  model: "PaddleOCR-VL-1.6"
 ```
 
-### 方式二：环境变量 (开发环境)
+**生效时机**：修改 `conf.yaml` 后需重启应用；环境变量修改即刻生效。
 
-设置环境变量：
+## 可选项一：自备 Token 直连
 
-```bash
-export LEGAL_EXTRACTOR_BAIDU_TOKEN="您的AccessToken"
-```
+适合希望使用自己云端额度、或网关临时不可用时自救的用户：
 
-> 公开发布包不会内置任何云服务 Token。请勿把个人 Token 写入源码目录或提交到 Git。
+1. 登录 [百度 AI Studio](https://aistudio.baidu.com/)，在「访问令牌」页获取 Token
+2. 填入 `ocr.token`（或设置环境变量），重启应用
+
+自备 Token 存在时**优先于网关**，请求直连官方接口，不占网关额度。
+
+## 可选项二：环境变量
+
+所有配置项都可用环境变量覆盖，前缀 `LEGAL_EXTRACTOR_`，层级点号换下划线：
+
+| 环境变量 | 对应配置 |
+|---|---|
+| `LEGAL_EXTRACTOR_OCR_TOKEN` | `ocr.token` |
+| `LEGAL_EXTRACTOR_OCR_GATEWAY_URL` | `ocr.gateway_url` |
+| `LEGAL_EXTRACTOR_OCR_MODEL` | `ocr.model` |
+
+## 旧版本配置兼容
+
+v4.1 及之前的 `baidu.token` 配置继续有效（自动等价为 `ocr.token`），
+建议迁移到新键名。旧的 `baidu.api_url`（同步接口）已废弃，不再读取。
 
 ## 常见问题
 
-**Q: 为什么提示 "OCR 失败"？**
-A: 请确认您的 Token 是否过期（通常有效期为 30 天），或者确认对应的 API（通用文字识别/高精度版）是否已在控制台领用免费额度。
+**Q：不配置任何东西，扫描件识别用的是谁的额度？**
+A：软件提供方在网关侧统一承担，按你的机器每日限额（见上）。
 
-**Q: 是否支持超长 PDF？**
-A: v3.0 引入了物理切片技术，会自动将超长文档分割后分次调用 API，彻底解决单次请求体积限制。
+**Q：公司内网能用吗？**
+A：只需放行对 `ocr-gw.bobochang.cn` 与百度云对象存储（`*.bcebos.com`）的
+HTTPS 出站。Word 与文字版 PDF 全程本地解析，可完全离线。
+
+**Q：如何确认当前走的是网关还是自备 Token？**
+A：`ocr.token` 非空即直连官方接口；为空则走网关。

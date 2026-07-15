@@ -52,6 +52,8 @@
 
 Windows ARM64 native builds are tracked as a separate release target because the Windows OCR bridge also needs a verified ARM64 artifact.
 
+📖 **[User Guide / 使用手册 (中文)](docs/user/USER_GUIDE.md)** — full manual for end users and field staff.
+
 ### Usage
 
 1. **Drag in or click to select** a legal document — parsing starts automatically and lands on the Evidence Desk
