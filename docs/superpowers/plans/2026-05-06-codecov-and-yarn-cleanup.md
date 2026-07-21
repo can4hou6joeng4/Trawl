@@ -402,7 +402,7 @@ Expected：本地 main 与 origin/main 一致；本地 `feature/codecov-and-yarn
 随后等约 2-3 分钟（main 的 push 会触发 Go 与 frontend 两个 job，各跑一次 codecov upload），用浏览器访问：
 
 ```
-https://codecov.io/gh/can4hou6joeng4/legal-extractor
+https://codecov.io/gh/can4hou6joeng4/Trawl
 ```
 
 Expected：Flags 区域应显示 `backend` 与 `frontend` 两条覆盖率线。如果只显示 `backend`（前端那条没出来），用 `gh run view --log <main-run-id>` 拉 main 那次 run 的日志，看 frontend 的 upload step 是否成功。

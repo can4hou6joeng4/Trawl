@@ -6,7 +6,7 @@
 
 ### 报告问题
 
-- 使用 [Issue 模板](https://github.com/can4hou6joeng4/legal-extractor/issues/new/choose) 提交 Bug 或功能建议
+- 使用 [Issue 模板](https://github.com/can4hou6joeng4/Trawl/issues/new/choose) 提交 Bug 或功能建议
 - 提交前请先搜索是否已有相关 Issue
 
 ### 提交代码
@@ -40,8 +40,8 @@ type 类型：`feat` / `fix` / `refactor` / `perf` / `docs` / `test` / `chore` /
 # - golangci-lint (代码检查): brew install golangci-lint
 
 # 克隆并安装依赖
-git clone https://github.com/can4hou6joeng4/legal-extractor.git
-cd legal-extractor
+git clone https://github.com/can4hou6joeng4/Trawl.git
+cd Trawl
 cd frontend && npm install && cd ..
 
 # 运行测试

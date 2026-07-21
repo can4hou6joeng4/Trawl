@@ -60,8 +60,8 @@
 文末链接追加：
 
 ```markdown
-[3.3.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.3.0
-[3.2.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.2.0
+[3.3.0]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v3.3.0
+[3.2.0]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v3.2.0
 ```
 
 ### 3.3 验收

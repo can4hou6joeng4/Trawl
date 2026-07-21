@@ -13,7 +13,7 @@ Legal Extractor 是一款桌面端法律文书提取工具：把起诉状等文�
 
 ## 1. 安装
 
-从 [Releases 页面](https://github.com/can4hou6joeng4/legal-extractor/releases/latest)
+从 [Releases 页面](https://github.com/can4hou6joeng4/Trawl/releases/latest)
 下载对应平台安装包：
 
 | 平台 | 文件 | 安装方式 |

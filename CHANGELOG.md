@@ -134,12 +134,12 @@
 - 实时预览与多格式导出
 - 暗色玻璃拟态 UI
 
-[3.3.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.3.0
-[3.2.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.2.0
-[3.1.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.1.0
-[3.0.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v3.0.0
-[2.1.5]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v2.1.5
-[2.1.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v2.1.0
-[2.0.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v2.0.0
-[1.1.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v1.1.0
-[1.0.0]: https://github.com/can4hou6joeng4/legal-extractor/releases/tag/v1.0.0
+[3.3.0]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v3.3.0
+[3.2.0]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v3.2.0
+[3.1.0]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v3.1.0
+[3.0.0]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v3.0.0
+[2.1.5]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v2.1.5
+[2.1.0]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v2.1.0
+[2.0.0]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v2.0.0
+[1.1.0]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v1.1.0
+[1.0.0]: https://github.com/can4hou6joeng4/Trawl/releases/tag/v1.0.0

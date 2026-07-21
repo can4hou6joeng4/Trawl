@@ -14,7 +14,7 @@
 请通过以下方式私密报告：
 
 1. 发送邮件至仓库所有者（可通过 GitHub 个人页面获取联系方式）
-2. 或使用 [GitHub Security Advisories](https://github.com/can4hou6joeng4/legal-extractor/security/advisories/new) 私密报告
+2. 或使用 [GitHub Security Advisories](https://github.com/can4hou6joeng4/Trawl/security/advisories/new) 私密报告
 
 我们会在收到报告后 72 小时内确认，并在 7 个工作日内提供修复计划。
 
