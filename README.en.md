@@ -14,7 +14,6 @@
 
 <p align="center">
   <a href="https://github.com/can4hou6joeng4/Trawl/releases/latest"><img src="https://img.shields.io/github/v/release/can4hou6joeng4/Trawl?style=flat-square&color=blue" alt="Latest Release"></a>
-  <a href="https://github.com/can4hou6joeng4/Trawl/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/can4hou6joeng4/Trawl/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status"></a>
   <a href="https://github.com/can4hou6joeng4/Trawl/stargazers"><img src="https://img.shields.io/github/stars/can4hou6joeng4/Trawl?style=flat-square&color=yellow" alt="Stars"></a>
   <a href="https://github.com/can4hou6joeng4/Trawl/graphs/commit-activity"><img src="https://img.shields.io/github/commit-activity/m/can4hou6joeng4/Trawl?style=flat-square" alt="Commit Activity"></a>
   <a href="https://github.com/can4hou6joeng4/Trawl/blob/main/LICENSE"><img src="https://img.shields.io/github/license/can4hou6joeng4/Trawl?style=flat-square" alt="License"></a>
@@ -35,7 +34,7 @@
 
 To *trawl through documents* is to comb piles of paper for information — exactly what this app does: it drags a net through Chinese legal complaints and hauls out the defendant, ID number, litigation requests, and facts as clean structured records.
 
-It sails with the nautical family: [Harbor](https://github.com/can4hou6joeng4/Harbor) shelters knowledge, [Beacon](https://github.com/can4hou6joeng4/Beacon) warns before certificates expire, [Atlas](https://github.com/can4hou6joeng4/Atlas) charts every AI coding voyage — and **Trawl** fishes value out of the document sea.
+Related: [Beacon](https://github.com/can4hou6joeng4/Beacon) — PDF certificate expiry audit.
 
 ---
 

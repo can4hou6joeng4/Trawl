@@ -14,7 +14,6 @@
 
 <p align="center">
   <a href="https://github.com/can4hou6joeng4/Trawl/releases/latest"><img src="https://img.shields.io/github/v/release/can4hou6joeng4/Trawl?style=flat-square&color=blue" alt="Latest Release"></a>
-  <a href="https://github.com/can4hou6joeng4/Trawl/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/can4hou6joeng4/Trawl/ci.yml?branch=main&style=flat-square&label=CI" alt="CI Status"></a>
   <a href="https://github.com/can4hou6joeng4/Trawl/stargazers"><img src="https://img.shields.io/github/stars/can4hou6joeng4/Trawl?style=flat-square&color=yellow" alt="Stars"></a>
   <a href="https://github.com/can4hou6joeng4/Trawl/graphs/commit-activity"><img src="https://img.shields.io/github/commit-activity/m/can4hou6joeng4/Trawl?style=flat-square" alt="Commit Activity"></a>
   <a href="https://github.com/can4hou6joeng4/Trawl/blob/main/LICENSE"><img src="https://img.shields.io/github/license/can4hou6joeng4/Trawl?style=flat-square" alt="License"></a>
@@ -35,7 +34,7 @@
 
 **Trawl**（拖网）。英语里 *trawl through documents* 正是「在成堆文件里翻找信息」——这恰好是本项目做的事：把散落在起诉状里的被告、身份证号、诉讼请求、事实与理由，像拖网捕捞一样，一次性打捞成整齐的结构化记录。
 
-它是航海家族的一员：[Harbor](https://github.com/can4hou6joeng4/Harbor) 让知识停泊，[Beacon](https://github.com/can4hou6joeng4/Beacon) 在证件过期前发出预警，[Atlas](https://github.com/can4hou6joeng4/Atlas) 丈量每一段 AI 编码航程，而 **Trawl** 负责在文书的海里捕捞价值。
+相关项目：[Beacon](https://github.com/can4hou6joeng4/Beacon) —— PDF 证件有效期审计。
 
 ---
 
