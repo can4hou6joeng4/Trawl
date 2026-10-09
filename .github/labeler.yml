@@ -1,0 +1,37 @@
+# 按改动路径给 PR 打标签（actions/labeler）。标签需事先存在于仓库。
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "**/*.md"
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "go.mod"
+          - "go.sum"
+          - "**/package.json"
+          - "**/package-lock.json"
+backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "internal/**"
+          - "cmd/**"
+          - "*.go"
+          - "config/**"
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "frontend/**"
+gateway-worker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "gateway-worker/**"
+test:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*_test.go"
+          - "testdata/**"
